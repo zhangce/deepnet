@@ -7,6 +7,7 @@
 #include "Network.h"
 
 #include "timer.h"
+using namespace std;
 
 int DIGIT=10;
 
@@ -27,6 +28,7 @@ int main(int argc, char ** argv){
 	}
 
 	for(int i_epoch=0;i_epoch<100000;i_epoch++){
+		cerr << i_epoch << endl;
 		int ncorr[10];
 		int ncorr_neg[10];
 		int npos[10];
