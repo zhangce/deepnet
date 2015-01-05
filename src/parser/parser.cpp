@@ -66,11 +66,12 @@ void dataSetup(cnn::LayerParameter& layer_param, cnn::Datum& datum){
   }
 }
 
-int main(){
+/*
+int main(int argc, char** argv){
 	GOOGLE_PROTOBUF_VERIFY_VERSION;
 
 	cnn::SolverParameter solver_param;
-	ReadProtoFromTextFile("mnist/lenet_solver.prototxt", &solver_param);
+	ReadProtoFromTextFile(argv[1], &solver_param);
 	cnn::NetParameter net_param;
 	ReadNetParamsFromTextFile(solver_param.net(), &net_param);
 	
@@ -95,6 +96,7 @@ int main(){
       std::cout << data.channels() << std::endl;
       std::cout << data.height() << std::endl;
       std::cout << data.width() << std::endl;
+      std::cout << data.label() << std::endl;
     } 
     
     if(layer_param.type() ==4){
@@ -105,4 +107,4 @@ int main(){
     }
     
   }
-}
+}*/
