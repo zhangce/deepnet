@@ -1,8 +1,7 @@
 #include <iostream>
 #include <fstream>
 #include <string>
-#include "cnn.pb.h"
-#include "parser.hpp"
+#include "parser.h"
 
 using namespace std;
 
