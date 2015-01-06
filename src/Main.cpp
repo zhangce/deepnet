@@ -18,6 +18,7 @@ void LeNet5(char * file);
 int main(int argc, char ** argv){
 
 	//MNISTCorpus corpus("input/train-labels-idx1-ubyte", "input/train-images-idx3-ubyte");
+	/*
 	cnn::SolverParameter solver_param;
 	ReadProtoFromTextFile(argv[1], &solver_param);
 	cnn::NetParameter net_param;
@@ -55,6 +56,7 @@ int main(int argc, char ** argv){
 	    }
 	    
 	  }
+	  */
 	LeNet5(argv[1]);
 	return 0;
 
