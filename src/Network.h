@@ -1,5 +1,5 @@
-
 #include "Image.h"
+#include "Operation.h"
 
 #ifndef _NETWORK_H
 #define _NETWORK_H
@@ -7,33 +7,21 @@
 class Layer{
 public:
 
-	int n_operations;
-	Operation ** operations;
-
-	Layer(int _n_operation){
-		n_operations = _n_operation;
-		operations = new Operation*[_n_operation];
-	}
+	Operation * operations;
 
 	void forward(){
-		for(int i_operation=0;i_operation<n_operations;i_operation++){
-			Operation * const operation = operations[i_operation];
-			operation->forward();
-		}
+		Operation * const operation = operations;
+		operation->forward();
 	}
 
 	void backward(){
-		for(int i_operation=0;i_operation<n_operations;i_operation++){
-			Operation * operation = operations[i_operation];
-			operation->backward();
-		}
+		Operation * operation = operations;
+		operation->backward();
 	}
 
 	void clear_grad(){
-		for(int i_operation=0;i_operation<n_operations;i_operation++){
-			Operation * operation = operations[i_operation];
-			operation->clear_grad();
-		}
+		Operation * operation = operations;
+		operation->clear_grad();
 	}
 
 };
@@ -69,7 +57,6 @@ public:
 			layer->backward();
 		}
 	}
-
 };
 
 

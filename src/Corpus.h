@@ -49,13 +49,13 @@ public:
 	    	labelfile.read((char*)&cc,sizeof(cc));
 	    	label = unsigned(cc);
 
-	    	images[i] = new Image(i, label, n_rows, n_cols);
+	    	images[i] = new Image(1,i, label, n_rows, n_cols);
 
 	    	for(int r=0;r<n_rows-padding*2;++r){
 	    		for(int c=0;c<n_cols-padding*2;++c){
 	    			file.read((char*)&temp,sizeof(temp));
 	    			//images[i]->pixels[r][c] = 1.0*unsigned(temp)/255;
-	    			images[i]->pixels[r+padding][c+padding] = 1.0*unsigned(temp)/255;
+	    			images[i]->pixels[0][0][r+padding][c+padding] = 1.0*unsigned(temp)/255;
 	    		}
 	    	}
 		}
