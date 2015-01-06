@@ -6,17 +6,11 @@ include_in_docs: true
 priority: 1
 ---
 
-# Training LeNet on MNIST with Caffe
-
-We will assume that you have Caffe successfully compiled. If not, please refer to the [Installation page](/installation.html). In this tutorial, we will assume that your Caffe installation is located at `CAFFE_ROOT`.
+# Training LeNet on MNIST
 
 ## Prepare Datasets
 
 You will first need to download and convert the data format from the MNIST website. To do this, simply run the following commands:
-
-    cd $CAFFE_ROOT
-    ./data/mnist/get_mnist.sh
-    ./examples/mnist/create_mnist.sh
 
 If it complains that `wget` or `gunzip` are not installed, you need to install them respectively. After running the script there should be two datasets, `mnist_train_lmdb`, and `mnist_test_lmdb`.
 
@@ -24,13 +18,13 @@ If it complains that `wget` or `gunzip` are not installed, you need to install t
 
 Before we actually run the training program, let's explain what will happen. We will use the [LeNet](http://yann.lecun.com/exdb/publis/pdf/lecun-01a.pdf) network, which is known to work well on digit classification tasks. We will use a slightly different version from the original LeNet implementation, replacing the sigmoid activations with Rectified Linear Unit (ReLU) activations for the neurons.
 
-The design of LeNet contains the essence of CNNs that are still used in larger models such as the ones in ImageNet. In general, it consists of a convolutional layer followed by a pooling layer, another convolution layer followed by a pooling layer, and then two fully connected layers similar to the conventional multilayer perceptrons. We have defined the layers in `$CAFFE_ROOT/examples/mnist/lenet_train_test.prototxt`.
+The design of LeNet contains the essence of CNNs that are still used in larger models such as the ones in ImageNet. In general, it consists of a convolutional layer followed by a pooling layer, another convolution layer followed by a pooling layer, and then two fully connected layers similar to the conventional multilayer perceptrons. We have defined the layers in `$DEEPNET_ROOT/src/mnist/lenet_train_test.prototxt`.
 
 ## Define the MNIST Network
 
-This section explains the `lenet_train_test.prototxt` model definition that specifies the LeNet model for MNIST handwritten digit classification. We assume that you are familiar with [Google Protobuf](https://developers.google.com/protocol-buffers/docs/overview), and assume that you have read the protobuf definitions used by Caffe, which can be found at `$CAFFE_ROOT/src/caffe/proto/caffe.proto`.
+This section explains the `lenet_train_test.prototxt` model definition that specifies the LeNet model for MNIST handwritten digit classification. We assume that you are familiar with [Google Protobuf](https://developers.google.com/protocol-buffers/docs/overview), and assume that you have read the protobuf definitions used by deepnet, which can be found at `$DEEPNET_ROOT/src/parser/cnn.proto`.
 
-Specifically, we will write a `caffe::NetParameter` (or in python, `caffe.proto.caffe_pb2.NetParameter`) protobuf. We will start by giving the network a name:
+Specifically, we will write a `cnn::NetParameter` protobuf. We will start by giving the network a name:
 
     name: "LeNet"
 
@@ -51,7 +45,7 @@ Currently, we will read the MNIST data from the lmdb we created earlier in the d
       top: "label"
     }
 
-Specifically, this layer has name `mnist`, type `data`, and it reads the data from the given lmdb source. We will use a batch size of 64, and scale the incoming pixels so that they are in the range \[0,1\). Why 0.00390625? It is 1 divided by 256. And finally, this layer produces two blobs, one is the `data` blob, and one is the `label` blob.
+Specifically, this layer has name `mnist`, type `data`, and it reads the data from the given lmdb source. We will use a batch size of 64, and scale the incoming pixels so that they are in the range \[0,1\). Why 0.00390625? It is 1 divided by 256. And finally, this layer produces two output, one is the `data` and other is the `label`.
 
 ### Writing the Convolution Layer
 
@@ -81,7 +75,6 @@ This layer takes the `data` blob (it is provided by the data layer), and produce
 
 The fillers allow us to randomly initialize the value of the weights and bias. For the weight filler, we will use the `xavier` algorithm that automatically determines the scale of initialization based on the number of input and output neurons. For the bias filler, we will simply initialize it as constant, with the default filling value 0.
 
-`blobs_lr` are the learning rate adjustments for the layer's learnable parameters. In this case, we will set the weight learning rate to be the same as the learning rate given by the solver during runtime, and the bias learning rate to be twice as large as that - this usually leads to better convergence rates.
 
 ### Writing the Pooling Layer
 
@@ -101,7 +94,7 @@ Phew. Pooling layers are actually much easier to define:
 
 This says we will perform max pooling with a pool kernel size 2 and a stride of 2 (so no overlapping between neighboring pooling regions).
 
-Similarly, you can write up the second convolution and pooling layers. Check `$CAFFE_ROOT/examples/mnist/lenet_train_test.prototxt` for details.
+Similarly, you can write up the second convolution and pooling layers. Check `$DEEPNET_ROOT/src/mnist/lenet_train_test.prototxt` for details.
 
 ### Writing the Fully Connected Layer
 
@@ -125,7 +118,7 @@ Writing a fully connected layer is also simple:
       top: "ip1"
     }
 
-This defines a fully connected layer (for some legacy reason, Caffe calls it an `innerproduct` layer) with 500 outputs. All other lines look familiar, right?
+This defines a fully connected layer with 500 outputs. All other lines look familiar, right?
 
 ### Writing the ReLU Layer
 
@@ -138,7 +131,7 @@ A ReLU Layer is also simple:
       top: "ip1"
     }
 
-Since ReLU is an element-wise operation, we can do *in-place* operations to save some memory. This is achieved by simply giving the same name to the bottom and top blobs. Of course, do NOT use duplicated blob names for other layer types!
+Since ReLU is an element-wise operation, we can do *in-place* operations to save some memory. This is achieved by simply giving the same name to the bottom and top layer. Of course, do NOT use duplicated names for other layer types!
 
 After the ReLU layer, we will write another innerproduct layer:
 
@@ -184,7 +177,7 @@ Layer definitions can include rules for whether and when they are included in th
     }
 
 This is a rule, which controls layer inclusion in the network, based on current network's state.
-You can refer to `$CAFFE_ROOT/src/caffe/proto/caffe.proto` for more information about layer rules and model schema.
+You can refer to `$DEEPNET_ROOT/src/parser/cnn.proto` for more information about layer rules and model schema.
 
 In the above example, this layer will be included only in `TRAIN` phase.
 If we change `TRAIN` with `TEST`, then this layer will be used only in test phase.
@@ -194,10 +187,10 @@ Also, there is an `ACCURACY` layer which is included only in `TEST` phase for re
 
 ## Define the MNIST Solver
 
-Check out the comments explaining each line in the prototxt `$CAFFE_ROOT/examples/mnist/lenet_solver.prototxt`:
+Check out the comments explaining each line in the prototxt `$DEEPNET_ROOT/src/parser/mnist/lenet_solver.prototxt`:
 
     # The train/test net protocol buffer definition
-    net: "examples/mnist/lenet_train_test.prototxt"
+    net: "mnist/lenet_train_test.prototxt"
     # test_iter specifies how many forward passes the test should carry out.
     # In the case of MNIST, we have test batch size 100 and 100 test iterations,
     # covering the full 10,000 testing images.
@@ -218,67 +211,11 @@ Check out the comments explaining each line in the prototxt `$CAFFE_ROOT/example
     max_iter: 10000
     # snapshot intermediate results
     snapshot: 5000
-    snapshot_prefix: "examples/mnist/lenet"
+    snapshot_prefix: "mnist/lenet"
     # solver mode: CPU or GPU
     solver_mode: GPU
 
 
 ## Training and Testing the Model
-
-Training the model is simple after you have written the network definition protobuf and solver protobuf files. Simply run `train_lenet.sh`, or the following command directly:
-
-    cd $CAFFE_ROOT
-    ./examples/mnist/train_lenet.sh
-
-`train_lenet.sh` is a simple script, but here is a quick explanation: the main tool for training is `caffe` with action `train` and the solver protobuf text file as its argument.
-
-When you run the code, you will see a lot of messages flying by like this:
-
-    I1203 net.cpp:66] Creating Layer conv1
-    I1203 net.cpp:76] conv1 <- data
-    I1203 net.cpp:101] conv1 -> conv1
-    I1203 net.cpp:116] Top shape: 20 24 24
-    I1203 net.cpp:127] conv1 needs backward computation.
-
-These messages tell you the details about each layer, its connections and its output shape, which may be helpful in debugging. After the initialization, the training will start:
-
-    I1203 net.cpp:142] Network initialization done.
-    I1203 solver.cpp:36] Solver scaffolding done.
-    I1203 solver.cpp:44] Solving LeNet
-
-Based on the solver setting, we will print the training loss function every 100 iterations, and test the network every 1000 iterations. You will see messages like this:
-
-    I1203 solver.cpp:204] Iteration 100, lr = 0.00992565
-    I1203 solver.cpp:66] Iteration 100, loss = 0.26044
-    ...
-    I1203 solver.cpp:84] Testing net
-    I1203 solver.cpp:111] Test score #0: 0.9785
-    I1203 solver.cpp:111] Test score #1: 0.0606671
-
-For each training iteration, `lr` is the learning rate of that iteration, and `loss` is the training function. For the output of the testing phase, score 0 is the accuracy, and score 1 is the testing loss function.
-
-And after a few minutes, you are done!
-
-    I1203 solver.cpp:84] Testing net
-    I1203 solver.cpp:111] Test score #0: 0.9897
-    I1203 solver.cpp:111] Test score #1: 0.0324599
-    I1203 solver.cpp:126] Snapshotting to lenet_iter_10000
-    I1203 solver.cpp:133] Snapshotting solver state to lenet_iter_10000.solverstate
-    I1203 solver.cpp:78] Optimization Done.
-
-The final model, stored as a binary protobuf file, is stored at
-
-    lenet_iter_10000
-
-which you can deploy as a trained model in your application, if you are training on a real-world application dataset.
-
-### Um... How about GPU training?
-
-You just did! All the training was carried out on the GPU. In fact, if you would like to do training on CPU, you can simply change one line in `lenet_solver.prototxt`:
-
-    # solver mode: CPU or GPU
-    solver_mode: CPU
-
-and you will be using CPU for training. Isn't that easy?
 
 MNIST is a small dataset, so training with GPU does not really introduce too much benefit due to communication overheads. On larger datasets with more complex models, such as ImageNet, the computation speed difference will be more significant.

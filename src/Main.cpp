@@ -12,12 +12,13 @@ using namespace std;
 
 int DIGIT=10;
 
-void LeNet5();
+void LeNet5(char * file);
 
 
 int main(int argc, char ** argv){
 
-	MNISTCorpus corpus("input/train-labels-idx1-ubyte", "input/train-images-idx3-ubyte");
+	//MNISTCorpus corpus("input/train-labels-idx1-ubyte", "input/train-images-idx3-ubyte");
+	/*
 	cnn::SolverParameter solver_param;
 	ReadProtoFromTextFile(argv[1], &solver_param);
 	cnn::NetParameter net_param;
@@ -55,7 +56,8 @@ int main(int argc, char ** argv){
 	    }
 	    
 	  }
-	LeNet5();
+	  */
+	LeNet5(argv[1]);
 	return 0;
 
 	// Build Network
@@ -64,10 +66,10 @@ int main(int argc, char ** argv){
 	// network.layers[0] = new Layer(6);
 	// Layer * layer1 = network.layers[0];
 	// for(int i=0;i<6;i++){
-	// 	layer1->operations
+	// 	layer1->operations[i]
 	// 		= (Operation*) new FullyConnectedOperation(1, 24, 24, corpus.n_rows, corpus.n_cols);
-	// 	layer1->operations->inputs[0] = corpus.images[0]->pixels;
-	// 	layer1->operations->grads[0] = NULL;
+	// 	layer1->operations[i]->inputs[0] = corpus.images[0]->pixels;
+	// 	layer1->operations[i]->grads[0] = NULL;
 	// }
 
 	// for(int i_epoch=0;i_epoch<1;i_epoch++){
@@ -88,7 +90,7 @@ int main(int argc, char ** argv){
 	// 	Timer t;
 	// 	for(int i_img=0;i_img<corpus.n_image;i_img++){
 	// 		for(int i=0;i<4;i++){
-	// 			layer1->operations->inputs[0] 
+	// 			layer1->operations[i]->inputs[0] 
 	// 				= corpus.images[i_img]->pixels;
 	// 		}
 	// 		network.forward();
@@ -106,63 +108,218 @@ int main(int argc, char ** argv){
 }
 
 
-void LeNet5(){
+void LeNet5(char * file){
 
-	MNISTCorpus corpus("input/train-labels-idx1-ubyte", "input/train-images-idx3-ubyte");
-	MNISTCorpus corpus_test("input/t10k-labels-idx1-ubyte", "input/t10k-images-idx3-ubyte");
-
+	cnn::SolverParameter solver_param;
+	ReadProtoFromTextFile(file, &solver_param);
+	cnn::NetParameter net_param;
+	ReadNetParamsFromTextFile(solver_param.net(), &net_param);
+	
 	// Build Network
-	int batch_size=10;
-	Network network(6);
+	cnn::Datum train_data;
+	cnn::Datum test_data;
+	int n_label = 10;
 
-	network.layers[0] = new Layer();
-	Layer * layer1 = network.layers[0];
-	layer1->operations
-		= (Operation*) new ConvOperation(1,1,20,24,24,28,28);
-	layer1->operations->inputs = NULL;
-	layer1->operations->grads = NULL;
+	int mini_batch_size_train;
+	int mini_batch_size_test;
+	int ninput_feature_map, noutput_feature_map, nrow_output, ncol_output, nrow_input, ncol_input;
+	int nrow_conv, ncol_conv;
+	int pad, stride;
+	int nlayers = net_param.layers_size();
 
-	network.layers[1] = new Layer();
-	Layer * layer2 = network.layers[1];
-	layer2->operations
-		= (Operation*) new MaxPoolingOperation(1, 20, 20, 12, 12, 24, 24);
-	layer2->operations->inputs = layer1->operations->output;
-	layer2->operations->grads = layer1->operations->grad;
+	for (int i=0; i<nlayers; i++){
+		cnn::LayerParameter layer_param = net_param.layers(i); 
+		if(layer_param.type() == cnn::LayerParameter_LayerType_DATA){
+			if (layer_param.include(0).phase() == 0){
+				dataSetup(layer_param, train_data);
+				mini_batch_size_train = layer_param.data_param().batch_size();
+				ninput_feature_map = train_data.channels();
+				nrow_input = train_data.height();
+				ncol_input = train_data.width();
+			}
+			if (layer_param.include(0).phase() == 1)
+				dataSetup(layer_param, test_data);
+			nlayers--;
+		}
+	}
 
-	network.layers[2] = new Layer();
-	Layer * layer3 = network.layers[2];
-	layer3->operations
-		= (Operation*) new ConvOperation(1, 20, 50, 8, 8, 12, 12);
-		layer3->operations->inputs = layer2->operations->output;
-		layer3->operations->grads = layer2->operations->grad;
 
-	network.layers[3] = new Layer();
-	Layer * layer4 = network.layers[3];
-	layer4->operations
-		= (Operation*) new MaxPoolingOperation(1, 50, 50, 4, 4, 8, 8);
-	layer4->operations->inputs = layer3->operations->output;
-	layer4->operations->grads = layer3->operations->grad;
+	MNISTCorpus corpus("input/train-labels-idx1-ubyte", "input/train-images-idx3-ubyte", mini_batch_size_train, ninput_feature_map);
+	MNISTCorpus corpus_test("input/t10k-labels-idx1-ubyte", "input/t10k-images-idx3-ubyte", mini_batch_size_test, ninput_feature_map);
 
-	network.layers[4] = new Layer();
-	Layer * layer5 = network.layers[4];
-	layer5->operations
-		= (Operation*) new FullyConnectedOperation(1, 50, 500, 1, 1, 4, 4);
-	layer5->operations->inputs = layer4->operations->output;
-	layer5->operations->grads = layer4->operations->grad;
+	Network network(nlayers);
 
-	network.layers[5] = new Layer();
-	Layer * layer6 = network.layers[5];
-	layer6->operations
-		= (Operation*) new SoftmaxOperation(1, 500, DIGIT, 1, 1, 1, 1);
-	layer6->operations->inputs = layer5->operations->output;
-	layer6->operations->grads = layer5->operations->grad;
+	Layer* dataLayer = new Layer();
+	dataLayer->operations->inputs = corpus.images[0]->pixels;
+	dataLayer->operations->grads = NULL;
 
+	for (int l=0; l<nlayers; l++){
+		cout << "L" << l << endl;
+		network.layers[l] = new Layer();
+		Layer * layerp;
+		if(l==0){
+			layerp = dataLayer;	
+		}
+		else{
+			layerp = network.layers[l-1];
+		}
+		Layer * layer = network.layers[l];
+		
+		cnn::LayerParameter layer_param = net_param.layers(l); 
+		int type = layer_param.type();
+		switch (type){
+		case cnn::LayerParameter_LayerType_CONVOLUTION:  
+		cout << "Convolution Operation" << endl;
+		ncol_conv = layer_param.convolution_param().kernel_size();
+		nrow_conv = layer_param.convolution_param().kernel_size();
+		noutput_feature_map = layer_param.convolution_param().num_output();
+		stride = layer_param.convolution_param().stride();
+		nrow_output = (nrow_input - nrow_conv)/stride + 1;
+		ncol_output = (ncol_input - ncol_conv)/stride + 1;
+
+		layer->operations = (Operation*) new ConvOperation(mini_batch_size_train, ninput_feature_map, noutput_feature_map, nrow_output, ncol_output, nrow_input, ncol_input);
+	    layer->operations->inputs = layerp->operations->output;
+		layer->operations->grads = layerp->operations->grad;
+
+		nrow_input = nrow_output;
+		ncol_input = ncol_output;
+		ninput_feature_map = noutput_feature_map;
+		break;
+
+		case cnn::LayerParameter_LayerType_POOLING:
+		cout << "Max Pooling Operation" << endl;
+		ncol_conv = layer_param.pooling_param().kernel_size();
+		nrow_conv = layer_param.pooling_param().kernel_size();
+		noutput_feature_map = ninput_feature_map;
+		stride = layer_param.pooling_param().stride();
+		nrow_output = (nrow_input - nrow_conv)/stride + 1;
+		ncol_output = (ncol_input - ncol_conv)/stride + 1;
+
+		layer->operations = (Operation*) new MaxPoolingOperation(mini_batch_size_train, ninput_feature_map, noutput_feature_map, nrow_output, ncol_output, nrow_input, ncol_input);
+	    layer->operations->inputs = layerp->operations->output;
+		layer->operations->grads = layerp->operations->grad;
+
+		nrow_input = nrow_output;
+		ncol_input = ncol_output;
+		ninput_feature_map = noutput_feature_map;
+		break;
+
+		case cnn::LayerParameter_LayerType_RELU:
+		cout << "Relu Operation" << endl;
+		noutput_feature_map = ninput_feature_map;
+		nrow_output = nrow_input;
+		ncol_output = ncol_input;
+
+		layer->operations = (Operation*) new RELUOperation(mini_batch_size_train, ninput_feature_map, noutput_feature_map, nrow_output, ncol_output, nrow_input, ncol_input);
+	    layer->operations->inputs = layerp->operations->output;
+		layer->operations->grads = layerp->operations->grad;
+
+		nrow_input = nrow_output;
+		ncol_input = ncol_output;
+		ninput_feature_map = noutput_feature_map;
+		break;
+
+		case cnn::LayerParameter_LayerType_INNER_PRODUCT:
+		cout << "Fully Connected Operation" << endl;
+		noutput_feature_map = layer_param.inner_product_param().num_output();
+		nrow_output = 1;
+		ncol_output = 1;
+
+		layer->operations = (Operation*) new FullyConnectedOperation(mini_batch_size_train, ninput_feature_map, noutput_feature_map, nrow_output, ncol_output, nrow_input, ncol_input);
+	    layer->operations->inputs = layerp->operations->output;
+		layer->operations->grads = layerp->operations->grad;
+
+		nrow_input = nrow_output;
+		ncol_input = ncol_output;
+		ninput_feature_map = noutput_feature_map;
+		break;
+
+		case cnn::LayerParameter_LayerType_SOFTMAX_LOSS:
+		cout << "Softmax Operation" << endl;
+		noutput_feature_map = n_label;
+		nrow_output = 1;
+		ncol_output = 1;
+
+		layer->operations = (Operation*) new SoftmaxOperation(mini_batch_size_train, ninput_feature_map, noutput_feature_map, nrow_output, ncol_output, nrow_input, ncol_input);
+	    layer->operations->inputs = layerp->operations->output;
+		layer->operations->grads = layerp->operations->grad;
+
+		nrow_input = nrow_output;
+		ncol_input = ncol_output;
+		ninput_feature_map = noutput_feature_map;
+		break; 
+		
+		case cnn::LayerParameter_LayerType_ACCURACY:
+		break;
+
+		default:
+		cout << "Invalid Layer type" << endl;
+		break;        
+		}
+	}
+
+	
+	// network.layers[0] = new Layer();
+	// Layer * layer1 = network.layers[0];
+	// layer1->operations
+	// 	= (Operation*) new ConvOperation(1,1,20,24,24,28,28);
+	// layer1->operations->inputs = corpus.images[0]->pixels;
+	// layer1->operations->grads = NULL;
+	
+
+	// network.layers[1] = new Layer();
+	// Layer * layer2 = network.layers[1];
+	// layer2->operations
+	// 	= (Operation*) new MaxPoolingOperation(1, 12, 12, 24, 24);
+	// layer2->operations->inputs = layer1->operations->output;
+	// layer2->operations->grads = layer1->operations->grad;
+
+
+
+	// network.layers[2] = new Layer(32);
+	// Layer * layer3 = network.layers[2];
+	// for(int i=0;i<32;i++){
+	// 	layer3->operations[i]
+	// 		= (Operation*) new FullyConnectedOperation(6, 8, 8, 12, 12);
+	// 	for(int j=0;j<6;j++){
+	// 		layer3->operations[i]->inputs[j] = layer2->operations[j]->output;
+	// 		layer3->operations[i]->grads[j] = layer2->operations[j]->grad;
+	// 	}
+	// }
+
+	// network.layers[3] = new Layer(32);
+	// Layer * layer4 = network.layers[3];
+	// for(int i=0;i<32;i++){
+	// 	layer4->operations[i]
+	// 		= (Operation*) new MaxPoolingOperation(1, 4, 4, 8, 8);
+	// 	layer4->operations[i]->inputs[0] = layer3->operations[i]->output;
+	// 	layer4->operations[i]->grads[0] = layer3->operations[i]->grad;
+	// }
+
+	// int NLAYER5=120;
+	// network.layers[4] = new Layer(NLAYER5);
+	// Layer * layer5 = network.layers[4];
+	// for(int i=0;i<NLAYER5;i++){
+	// 	layer5->operations[i]
+	// 		= (Operation*) new FullyConnectedOperation(32, 1, 1, 4, 4);
+	// 	for(int j=0;j<32;j++){
+	// 		layer5->operations[i]->inputs[j] = layer4->operations[j]->output;
+	// 		layer5->operations[i]->grads[j] = layer4->operations[j]->grad;
+	// 	}
+	// }
+
+	// network.layers[5] = new Layer(1);
+	// Layer * layer6 = network.layers[5];
+	// layer6->operations[0]
+	// 	= (Operation*) new SoftmaxOperation(NLAYER5, DIGIT, 1, 1);
+	// for(int i=0;i<NLAYER5;i++){
+	// 	layer6->operations[0]->inputs[i]
+	// 		= layer5->operations[i]->output;
+	// 	layer6->operations[0]->grads[i]
+	// 		= layer5->operations[i]->grad;
+	// }
 
 	for(int i_epoch=0;i_epoch<1;i_epoch++){
-		float **** batch_data= new float *** [batch_size];
-		for(int i=i_epoch*batch_size; i<(i_epoch+1)*batch_size; i++)
-			batch_data[i]=corpus.images[i]->pixels;
-		layer1->operations->inputs=batch_data;
 		int ncorr[10];
 		int ncorr_neg[10];
 		int npos[10];
@@ -180,58 +337,138 @@ void LeNet5(){
 		cout << corpus.n_image << endl;
 		for(int i_img=0;i_img<corpus.n_image;i_img++){
 
-			layer6->operations->groundtruth 
-				= (corpus.images[i_img]->label);
-
-			float **** batch_data_test= new float *** [1];
-			batch_data_test[0]=corpus.images[i_img]->pixels;
-			layer1->operations->inputs=batch_data;
+			network.layers[nlayers-1]->operations->groundtruth 	= (corpus.images[i_img]->label);
+			network.layers[0]->operations->inputs = corpus.images[i_img]->pixels;
 
 			network.forward();
 			//network.backward();	
 		}
-		float trainingtime = t.elapsed();
-		std::cout << "Training " << trainingtime << " seconds..." << "  " <<
-			(trainingtime/corpus.n_image) << " seconds/image." << std::endl;
-
-		t.restart();
-		for(int i_img=0;i_img<corpus_test.n_image;i_img++){
-
-			layer6->operations->groundtruth 
-				= (corpus_test.images[i_img]->label);
-			float **** batch_data_test= new float *** [1];
-			batch_data_test[0]=corpus.images[i_img]->pixels;
-			layer1->operations->inputs=batch_data;
-
-			network.forward();
-			
-			int gt = (corpus_test.images[i_img]->label);
-			int imax;
-			float ifloat = -1;
-			for(int dig=0;dig<DIGIT;dig++){
-				float out = layer6->operations->output[0][dig][0][0];
-				if(out > ifloat){
-					imax = dig;
-					ifloat = out;
-				}
-			}
-			nneg[gt] ++;
-			ncorr_neg[gt] += (gt==imax);
-			loss_test += (gt==imax);
-		}
-		float testingtime = t.elapsed();
-		std::cout << "Testing " << t.elapsed() << " seconds..." << "  " <<
-			(testingtime/corpus_test.n_image) << " seconds/image." << std::endl;
-		
-		std::cout << "----TEST----" << loss_test/corpus_test.n_image << std::endl;
-		for(int dig=0;dig<DIGIT;dig++){
-			std::cout << "## DIG=" << dig << " : ";
-			std::cout << 1.0*ncorr_neg[dig]/nneg[dig] << " = " << ncorr_neg[dig] << "/" << nneg[dig] << std::endl;
-		}
-
 	}
+	// 	float trainingtime = t.elapsed();
+	// 	std::cout << "Training " << trainingtime << " seconds..." << "  " <<
+	// 		(trainingtime/corpus.n_image) << " seconds/image." << std::endl;
+
+	// 	t.restart();
+	// 	for(int i_img=0;i_img<corpus_test.n_image;i_img++){
+
+	// 		layer6->operations[0]->groundtruth 
+	// 			= (corpus_test.images[i_img]->label);
+	// 		for(int i=0;i<4;i++){
+	// 			layer1->operations[i]->inputs[0] 
+	// 				= corpus_test.images[i_img]->pixels;
+	// 		}
+
+	// 		network.forward();
+			
+	// 		int gt = (corpus_test.images[i_img]->label);
+	// 		int imax;
+	// 		float ifloat = -1;
+	// 		for(int dig=0;dig<DIGIT;dig++){
+	// 			float out = layer6->operations[0]->output[0][dig];
+	// 			if(out > ifloat){
+	// 				imax = dig;
+	// 				ifloat = out;
+	// 			}
+	// 		}
+	// 		nneg[gt] ++;
+	// 		ncorr_neg[gt] += (gt==imax);
+	// 		loss_test += (gt==imax);
+	// 	}
+	// 	float testingtime = t.elapsed();
+	// 	std::cout << "Testing " << t.elapsed() << " seconds..." << "  " <<
+	// 		(testingtime/corpus_test.n_image) << " seconds/image." << std::endl;
+		
+	// 	std::cout << "----TEST----" << loss_test/corpus_test.n_image << std::endl;
+	// 	for(int dig=0;dig<DIGIT;dig++){
+	// 		std::cout << "## DIG=" << dig << " : ";
+	// 		std::cout << 1.0*ncorr_neg[dig]/nneg[dig] << " = " << ncorr_neg[dig] << "/" << nneg[dig] << std::endl;
+	// 	}
+
+	// }
 
 	std::cout << "DONE" << std::endl;
 
 }
+
+
+
+	/*
+	Network network(3);
+
+	network.layers[0] = new Layer(2);
+	for(int i=0;i<2;i++){
+		network.layers[0]->operations[i]
+			= (Operation*) new ConvOperation(5, 5, corpus.n_rows, corpus.n_cols);
+		network.layers[0]->operations[i]->inputs[0]
+			= corpus.images[0]->pixels;
+		network.layers[0]->operations[i]->grads[0]
+			= NULL;	
+	}
+
+	network.layers[1] = new Layer(10);
+	for(int i=0;i<10;i++){
+		network.layers[1]->operations[i]
+			= (Operation*) new FullyConnectedOperation(2, 1, 1, 5, 5);
+		network.layers[1]->operations[i]->inputs[0]
+			= network.layers[0]->operations[0]->output;
+		network.layers[1]->operations[i]->inputs[1]
+			= network.layers[0]->operations[1]->output;
+
+		network.layers[1]->operations[i]->grads[0]
+			= network.layers[0]->operations[0]->grad;
+		network.layers[1]->operations[i]->grads[1]
+			= network.layers[0]->operations[1]->grad;
+	}
+
+	network.layers[2] = new Layer(1);
+	network.layers[2]->operations[0]
+		= (Operation*) new LogisticOperation(10, 1, 1, 1, 1);
+	for(int i=0;i<10;i++){
+		network.layers[2]->operations[0]->inputs[i]
+			= network.layers[1]->operations[i]->output;
+		network.layers[2]->operations[0]->grads[i]
+			= network.layers[1]->operations[i]->grad;
+	}
+
+	for(int i_epoch=0;i_epoch<100;i_epoch++){
+		int ncorr = 0;
+		int ncorr_neg = 0;
+		int npos = 0;
+		int nneg = 0;
+		float loss = 0.0;
+		for(int i_img=0;i_img<corpus.n_image;i_img++){
+			network.layers[2]->operations[0]->groundtruth 
+				= corpus.images[i_img]->label == 3;
+			network.layers[0]->operations[0]->inputs[0]
+				= corpus.images[i_img]->pixels;
+			network.layers[0]->operations[1]->inputs[0]
+				= corpus.images[i_img]->pixels;
+			network.forward();
+
+			int gt = network.layers[2]->operations[0]->groundtruth;
+			float out = network.layers[2]->operations[0]->output[0][0];
+
+			
+			if(gt == 1){
+				npos ++;
+				ncorr += ((out>0.5) == gt);
+			}else{
+				nneg ++;
+				ncorr_neg += ((out>0.5) == gt);
+			}
+
+			loss += fabs(gt-out);
+
+			network.backward();
+		}
+		std::cout << "------------" << loss/corpus.n_image << std::endl;
+		std::cout << "+ " << 1.0*ncorr/npos << " = " << ncorr << "/" << npos << std::endl;
+		std::cout << "- " << 1.0*ncorr_neg/nneg << " = " << ncorr_neg << "/" << nneg << std::endl;
+	}
+	*/
+
+
+
+
+
 
