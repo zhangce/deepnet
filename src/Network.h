@@ -46,7 +46,6 @@ public:
 	}
 
 	void backward(){
-
 		for(int i_layer=0; i_layer<n_layer; i_layer++){
 			Layer * layer = layers[i_layer];
 			layer->clear_grad();
