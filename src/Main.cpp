@@ -109,7 +109,7 @@ int main(int argc, char ** argv){
 
 
 void LeNet5(char * file){
-
+	
 	cnn::SolverParameter solver_param;
 	ReadProtoFromTextFile(file, &solver_param);
 	cnn::NetParameter net_param;
@@ -126,7 +126,7 @@ void LeNet5(char * file){
 	int nrow_conv, ncol_conv;
 	int pad, stride;
 	int nlayers = net_param.layers_size();
-
+		
 	for (int i=0; i<nlayers; i++){
 		cnn::LayerParameter layer_param = net_param.layers(i); 
 		if(layer_param.type() == cnn::LayerParameter_LayerType_DATA){
@@ -137,22 +137,29 @@ void LeNet5(char * file){
 				nrow_input = train_data.height();
 				ncol_input = train_data.width();
 			}
-			if (layer_param.include(0).phase() == 1)
+			if (layer_param.include(0).phase() == 1){
 				dataSetup(layer_param, test_data);
+				mini_batch_size_test = layer_param.data_param().batch_size();
+			}
 			nlayers--;
 		}
 	}
 
-
 	MNISTCorpus corpus("input/train-labels-idx1-ubyte", "input/train-images-idx3-ubyte", mini_batch_size_train, ninput_feature_map);
+	cout << "Corpus train loaded" << endl;
 	MNISTCorpus corpus_test("input/t10k-labels-idx1-ubyte", "input/t10k-images-idx3-ubyte", mini_batch_size_test, ninput_feature_map);
+	cout << "Corpus test Loaded" << endl;	
 
 	Network network(nlayers);
 
-	Layer* dataLayer = new Layer();
-	dataLayer->operations->inputs = corpus.images[0]->pixels;
-	dataLayer->operations->grads = NULL;
-
+	cout << "Initialising data layer" << endl;
+	Layer * dataLayer = new Layer();
+	dataLayer->operations = (Operation*) new DataOperation(mini_batch_size_train, ninput_feature_map, ninput_feature_map, corpus.n_rows, corpus.n_cols, corpus.n_rows, corpus.n_cols);
+	dataLayer->operations->output = corpus.images[0]->pixels;
+	cout << "Batch 0 loaded" << endl;
+	dataLayer->operations->grad = NULL;
+	cout << "data initialised" << endl;
+	
 	for (int l=0; l<nlayers; l++){
 		cout << "L" << l << endl;
 		network.layers[l] = new Layer();
@@ -165,7 +172,7 @@ void LeNet5(char * file){
 		}
 		Layer * layer = network.layers[l];
 		
-		cnn::LayerParameter layer_param = net_param.layers(l); 
+		cnn::LayerParameter layer_param = net_param.layers(l+2); 
 		int type = layer_param.type();
 		switch (type){
 		case cnn::LayerParameter_LayerType_CONVOLUTION:  
@@ -178,7 +185,7 @@ void LeNet5(char * file){
 		ncol_output = (ncol_input - ncol_conv)/stride + 1;
 
 		layer->operations = (Operation*) new ConvOperation(mini_batch_size_train, ninput_feature_map, noutput_feature_map, nrow_output, ncol_output, nrow_input, ncol_input);
-	    layer->operations->inputs = layerp->operations->output;
+	        layer->operations->inputs = layerp->operations->output;
 		layer->operations->grads = layerp->operations->grad;
 
 		nrow_input = nrow_output;
@@ -389,86 +396,6 @@ void LeNet5(char * file){
 	std::cout << "DONE" << std::endl;
 
 }
-
-
-
-	/*
-	Network network(3);
-
-	network.layers[0] = new Layer(2);
-	for(int i=0;i<2;i++){
-		network.layers[0]->operations[i]
-			= (Operation*) new ConvOperation(5, 5, corpus.n_rows, corpus.n_cols);
-		network.layers[0]->operations[i]->inputs[0]
-			= corpus.images[0]->pixels;
-		network.layers[0]->operations[i]->grads[0]
-			= NULL;	
-	}
-
-	network.layers[1] = new Layer(10);
-	for(int i=0;i<10;i++){
-		network.layers[1]->operations[i]
-			= (Operation*) new FullyConnectedOperation(2, 1, 1, 5, 5);
-		network.layers[1]->operations[i]->inputs[0]
-			= network.layers[0]->operations[0]->output;
-		network.layers[1]->operations[i]->inputs[1]
-			= network.layers[0]->operations[1]->output;
-
-		network.layers[1]->operations[i]->grads[0]
-			= network.layers[0]->operations[0]->grad;
-		network.layers[1]->operations[i]->grads[1]
-			= network.layers[0]->operations[1]->grad;
-	}
-
-	network.layers[2] = new Layer(1);
-	network.layers[2]->operations[0]
-		= (Operation*) new LogisticOperation(10, 1, 1, 1, 1);
-	for(int i=0;i<10;i++){
-		network.layers[2]->operations[0]->inputs[i]
-			= network.layers[1]->operations[i]->output;
-		network.layers[2]->operations[0]->grads[i]
-			= network.layers[1]->operations[i]->grad;
-	}
-
-	for(int i_epoch=0;i_epoch<100;i_epoch++){
-		int ncorr = 0;
-		int ncorr_neg = 0;
-		int npos = 0;
-		int nneg = 0;
-		float loss = 0.0;
-		for(int i_img=0;i_img<corpus.n_image;i_img++){
-			network.layers[2]->operations[0]->groundtruth 
-				= corpus.images[i_img]->label == 3;
-			network.layers[0]->operations[0]->inputs[0]
-				= corpus.images[i_img]->pixels;
-			network.layers[0]->operations[1]->inputs[0]
-				= corpus.images[i_img]->pixels;
-			network.forward();
-
-			int gt = network.layers[2]->operations[0]->groundtruth;
-			float out = network.layers[2]->operations[0]->output[0][0];
-
-			
-			if(gt == 1){
-				npos ++;
-				ncorr += ((out>0.5) == gt);
-			}else{
-				nneg ++;
-				ncorr_neg += ((out>0.5) == gt);
-			}
-
-			loss += fabs(gt-out);
-
-			network.backward();
-		}
-		std::cout << "------------" << loss/corpus.n_image << std::endl;
-		std::cout << "+ " << 1.0*ncorr/npos << " = " << ncorr << "/" << npos << std::endl;
-		std::cout << "- " << 1.0*ncorr_neg/nneg << " = " << ncorr_neg << "/" << nneg << std::endl;
-	}
-	*/
-
-
-
 
 
 
