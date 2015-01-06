@@ -399,7 +399,6 @@ public:
 							grads[mb][fm][r][c] = 0;
 	}
 
-	int n_input;
 
 	MaxPoolingOperation(int _mini_batch_size, int _ninput_feature_map, int _noutput_feature_map, 
 				int _nrow_output, int _ncol_output, int _nrow_input, int _ncol_input):
@@ -409,7 +408,6 @@ public:
 
 		assert(nrow_input % nrow_output == 0);
 		assert(ncol_input % ncol_output == 0);
-		assert(n_input == 1);
 			// TODO: NEED WORK
 
 	}
@@ -549,16 +547,15 @@ public:
 				output[mb][i][0][0] = sum;
 			}
 
-		float sum = -100000;
-		for(int mb=0; mb<mini_batch_size; mb++)
+		for(int mb=0; mb<mini_batch_size; mb++){
+			float sum = -100000;
 			for(int i=0;i<n_label;i++){
 				sum = logadd(sum, output[mb][i][0][0]); 
 			}
-		for(int mb=0; mb<mini_batch_size; mb++)
 			for(int i=0;i<n_label;i++){
 				output[mb][i][0][0] = exp(output[mb][i][0][0]-sum);
 			}
-
+		}
 	}
 
 };

@@ -55,7 +55,7 @@ public:
 	    		for(int c=0;c<n_cols-padding*2;++c){
 	    			file.read((char*)&temp,sizeof(temp));
 	    			//images[i]->pixels[r][c] = 1.0*unsigned(temp)/255;
-	    			images[i]->pixels[0][0][r+padding][c+padding] = 1.0*unsigned(temp)/255;
+	    			images[i]->pixels[0][r+padding][c+padding] = 1.0*unsigned(temp)/255;
 	    		}
 	    	}
 		}

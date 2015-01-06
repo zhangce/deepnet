@@ -12,7 +12,7 @@ public:
 	int nrows;
 	int ncols;
 
-	float **** pixels;
+	float *** pixels;
 
 	float * _buf;
 
@@ -23,12 +23,11 @@ public:
 		ncols = _ncol;
 		label = _label;
 		_buf = new float[1*dim*nrows*ncols];
-		pixels = new float ***[1];
-		pixels[0] = new float ** [dim];
+		pixels = new float ** [dim];
 		for(int d=0; d<dim; d++){
-			pixels[0][d] = new float*[nrows];
+			pixels[d] = new float*[nrows];
 			for(int i=0;i<nrows;i++){
-				pixels[0][d][i] = &_buf[i*ncols];
+				pixels[d][i] = &_buf[i*ncols];
 			}
 		}
 	}
@@ -37,7 +36,7 @@ public:
 		for(int d=0; d<dim; d++){
 			for(int r=0;r<nrows;r++){
 				for(int c=0;c<ncols;c++){
-					std::cout << pixels[0][0][r][c] <<  " " ;
+					std::cout << pixels[0][r][c] <<  " " ;
 				}
 				std::cout << std::endl;
 			}
