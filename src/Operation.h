@@ -13,6 +13,9 @@
 
 using namespace std;
 
+#define show(x) cerr << #x << " : " << x << endl;
+
+//TODO CHECK AND CHANGE GEMM to cblas_sgemm
 
 #define BLASFUNC(FUNC) FUNC##_
 
@@ -36,7 +39,7 @@ inline float logadd(float lna, float lnb)
 class Operation{
 public:
 
-	int groundtruth;
+	int * groundtruth;
 
 	int mini_batch_size;
 	int ninput_feature_map;
@@ -83,6 +86,8 @@ public:
 		ncol_output = _ncol_output;
 		nrow_input = _nrow_input;
 		ncol_input = _ncol_input;
+
+		groundtruth= new int [_mini_batch_size];
 		
 		buf_out = new float[mini_batch_size* noutput_feature_map * nrow_output*ncol_output];
 		output= new float ***[mini_batch_size];
@@ -158,9 +163,9 @@ public:
 	void clear_grad(){
 		if(grads[0] != NULL)
 			for(int mb=0; mb<mini_batch_size; mb++)
-				for(int fm=0; fm<noutput_feature_map; fm++)
-					for(int r=0;r<nrow_output;r++)
-						for(int c=0; c<ncol_output;c++)
+				for(int fm=0; fm<ninput_feature_map; fm++)
+					for(int r=0;r<nrow_input;r++)
+						for(int c=0; c<ncol_input;c++)
 							grads[mb][fm][r][c] = 0;
 	}
 
@@ -217,8 +222,8 @@ public:
 
 									float x = inputs[mb][ifm][ir][ic];
 									float grad_w = (1.0-cvalue*cvalue)*x * cgrad;
-									weights[mb][ifm][ir-r][ic-c] = 
-										weights[mb][ifm][ir-r][ic-c] + STEPSIZE * grad_w;
+									weights[ofm][ifm][ir-r][ic-c] = 
+										weights[ofm][ifm][ir-r][ic-c] + STEPSIZE * grad_w;
 								}
 							}
 						}
@@ -277,9 +282,9 @@ public:
 	void clear_grad(){
 		if(grads[0] != NULL)
 			for(int mb=0; mb<mini_batch_size; mb++)
-				for(int fm=0; fm<noutput_feature_map; fm++)
-					for(int r=0;r<nrow_output;r++)
-						for(int c=0; c<ncol_output;c++)
+				for(int fm=0; fm<ninput_feature_map; fm++)
+					for(int r=0;r<nrow_input;r++)
+						for(int c=0; c<ncol_input;c++)
 							grads[mb][fm][r][c] = 0;
 	}
 
@@ -313,7 +318,7 @@ public:
 								for(int ic=c;ic<c+ncol_conv;ic++){
 
 									float w = weights[ofm][ifm][ir-r][ic-c];
-									float grad_x = (1.0-cvalue*cvalue)*w * cgrad;
+									float grad_x = w * cgrad;
 
 									if(grads[0] != NULL){
 										grads[mb][ifm][ir][ic] += grad_x;
@@ -336,8 +341,8 @@ public:
 
 									float x = inputs[mb][ifm][ir][ic];
 									float grad_w = (1.0-cvalue*cvalue)*x * cgrad;
-									weights[mb][ifm][ir-r][ic-c] = 
-										weights[mb][ifm][ir-r][ic-c] + STEPSIZE * grad_w;
+									weights[ofm][ifm][ir-r][ic-c] = 
+										weights[ofm][ifm][ir-r][ic-c] + STEPSIZE * grad_w;
 								}
 							}
 						}
@@ -393,9 +398,9 @@ public:
 	void clear_grad(){
 		if(grads[0] != NULL)
 			for(int mb=0; mb<mini_batch_size; mb++)
-				for(int fm=0; fm<noutput_feature_map; fm++)
-					for(int r=0;r<nrow_output;r++)
-						for(int c=0; c<ncol_output;c++)
+				for(int fm=0; fm<ninput_feature_map; fm++)
+					for(int r=0;r<nrow_input;r++)
+						for(int c=0; c<ncol_input;c++)
 							grads[mb][fm][r][c] = 0;
 	}
 
@@ -476,9 +481,9 @@ public:
 	void clear_grad(){
 		if(grads[0] != NULL)
 			for(int mb=0; mb<mini_batch_size; mb++)
-				for(int fm=0; fm<noutput_feature_map; fm++)
-					for(int r=0;r<nrow_output;r++)
-						for(int c=0; c<ncol_output;c++)
+				for(int fm=0; fm<ninput_feature_map; fm++)
+					for(int r=0;r<nrow_input;r++)
+						for(int c=0; c<ncol_input;c++)
 							grads[mb][fm][r][c] = 0;
 	}
 	SoftmaxOperation(int _mini_batch_size, int _ninput_feature_map, int _noutput_feature_map, 
@@ -518,8 +523,8 @@ public:
 					float w = softweights[mb][label][i_input];
 					float x = inputs[mb][i_input][0][0];
 
-					float grad_w = (label == groundtruth)*x - cvalue*x;
-					float grad_x = (label == groundtruth)*w - cvalue*w;
+					float grad_w = (label == groundtruth[mb])*x - cvalue*x;
+					float grad_x = (label == groundtruth[mb])*w - cvalue*w;
 
 					softweights[mb][label][i_input] = 
 						softweights[mb][label][i_input] + STEPSIZE * grad_w;
@@ -530,8 +535,8 @@ public:
 
 				float w = biases[label];
 				float x = 1.0;
-				float grad_w = (label == groundtruth)*x - cvalue*x;
-				float grad_x = (label == groundtruth)*w - cvalue*w;
+				float grad_w = (label == groundtruth[mb])*x - cvalue*x;
+				float grad_x = (label == groundtruth[mb])*w - cvalue*w;
 				biases[label] = biases[label] + STEPSIZE * grad_w;
 			}
 	}
@@ -566,9 +571,9 @@ public:
 	void clear_grad(){
 		if(grads[0] != NULL)
 			for(int mb=0; mb<mini_batch_size; mb++)
-				for(int fm=0; fm<noutput_feature_map; fm++)
-					for(int r=0;r<nrow_output;r++)
-						for(int c=0; c<ncol_output;c++)
+				for(int fm=0; fm<ninput_feature_map; fm++)
+					for(int r=0;r<nrow_input;r++)
+						for(int c=0; c<ncol_input;c++)
 							grads[mb][fm][r][c] = 0;
 	}
 
@@ -600,6 +605,33 @@ public:
 					   output[mb][fm][r][c] = std::max(inputs[mb][fm][r][c], (float)0.0);
 					}
 	}
+
+};
+
+class DataOperation : public Operation{
+public:
+
+	float bias;
+
+	void clear_grad(){
+		;
+	}
+
+	DataOperation(int _mini_batch_size, int _ninput_feature_map, int _noutput_feature_map, 
+				int _nrow_output, int _ncol_output, int _nrow_input, int _ncol_input):
+		Operation(_mini_batch_size, _ninput_feature_map, _noutput_feature_map,
+				_nrow_output,_ncol_output,_nrow_input,_ncol_input){
+			;
+	}
+
+	void backward(){
+		;
+	}
+
+	void forward(){
+		;
+	}
+
 
 };
 

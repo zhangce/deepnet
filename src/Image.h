@@ -9,7 +9,7 @@ public:
 	int bs;
 	int dim;
 	int img_id;
-	int label;
+	int * label;
 	int nrows;
 	int ncols;
 
@@ -17,7 +17,7 @@ public:
 
 	float * _buf;
 
-	Image(int _bs, int _dim, int _img_id, int _label, int _nrow, int _ncol){
+	Image(int _bs, int _dim, int _img_id, int * _label, int _nrow, int _ncol){
 		bs = _bs;
 		dim = _dim;
 		img_id = _img_id;
