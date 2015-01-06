@@ -14,11 +14,12 @@ class MNISTCorpus{
 public:
 
 	int n_image;
+	int n_batch;
 	int n_rows;
 	int n_cols;
 	Image ** images;
 
-	MNISTCorpus(std::string label_file, std::string img_file){
+	MNISTCorpus(std::string label_file, std::string img_file, int mini_batch_size, int dim){
 
 		int padding = 2;
 
@@ -45,19 +46,25 @@ public:
 
 	    images = new Image*[n_image];
 
-		for(int i=0;i<n_image;i++){
+	    n_batch = n_image/mini_batch_size;
+
+		for(int i=0;i<n_batch;i++){
 	    	labelfile.read((char*)&cc,sizeof(cc));
 	    	label = unsigned(cc);
 
-	    	images[i] = new Image(1,i, label, n_rows, n_cols);
+	    	images[i] = new Image(mini_batch_size ,dim,i, label, n_rows, n_cols);
 
-	    	for(int r=0;r<n_rows-padding*2;++r){
-	    		for(int c=0;c<n_cols-padding*2;++c){
-	    			file.read((char*)&temp,sizeof(temp));
-	    			//images[i]->pixels[r][c] = 1.0*unsigned(temp)/255;
-	    			images[i]->pixels[0][0][r+padding][c+padding] = 1.0*unsigned(temp)/255;
-	    		}
-	    	}
+	    	for(int b=0;b<mini_batch_size;++b){
+	    		for(int d=0;d<dim;++d){
+			    	for(int r=0;r<n_rows-padding*2;++r){
+			    		for(int c=0;c<n_cols-padding*2;++c){
+			    			file.read((char*)&temp,sizeof(temp));
+			    			//images[i]->pixels[r][c] = 1.0*unsigned(temp)/255;
+			    			images[i]->pixels[b][d][r+padding][c+padding] = 1.0*unsigned(temp)/255;
+			    		}
+			    	}
+			    }
+			} 	
 		}
 	}
 };

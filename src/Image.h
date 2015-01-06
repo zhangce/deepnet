@@ -6,6 +6,7 @@
 
 class Image{
 public:
+	int bs;
 	int dim;
 	int img_id;
 	int label;
@@ -16,28 +17,34 @@ public:
 
 	float * _buf;
 
-	Image(int _dim, int _img_id, int _label, int _nrow, int _ncol){
+	Image(int _bs, int _dim, int _img_id, int _label, int _nrow, int _ncol){
+		bs = _bs;
 		dim = _dim;
 		img_id = _img_id;
 		nrows = _nrow;
 		ncols = _ncol;
 		label = _label;
-		_buf = new float[1*dim*nrows*ncols];
-		pixels = new float ***[1];
-		pixels[0] = new float ** [dim];
-		for(int d=0; d<dim; d++){
-			pixels[0][d] = new float*[nrows];
-			for(int i=0;i<nrows;i++){
-				pixels[0][d][i] = &_buf[i*ncols];
+		_buf = new float[bs*dim*nrows*ncols];
+		pixels = new float ***[bs];
+		for(int b=0; b<bs;b++){
+			pixels[b] = new float ** [dim];
+			for(int d=0; d<dim; d++){
+				pixels[b][d] = new float*[nrows];
+				for(int i=0;i<nrows;i++){
+					pixels[b][d][i] = &_buf[b*dim*nrows*ncols+d*nrows*ncols+i*ncols];
+				}
 			}
 		}
 	}
 
 	void show(){
-		for(int d=0; d<dim; d++){
-			for(int r=0;r<nrows;r++){
-				for(int c=0;c<ncols;c++){
-					std::cout << pixels[0][0][r][c] <<  " " ;
+		for(int b=0;b<bs;b++){
+			for(int d=0; d<dim; d++){
+				for(int r=0;r<nrows;r++){
+					for(int c=0;c<ncols;c++){
+						std::cout << pixels[b][d][r][c] <<  " " ;
+					}
+					std::cout << std::endl;
 				}
 				std::cout << std::endl;
 			}

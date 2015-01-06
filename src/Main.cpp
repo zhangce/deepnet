@@ -110,9 +110,6 @@ int main(int argc, char ** argv){
 
 void LeNet5(char * file){
 
-	MNISTCorpus corpus("input/train-labels-idx1-ubyte", "input/train-images-idx3-ubyte");
-	MNISTCorpus corpus_test("input/t10k-labels-idx1-ubyte", "input/t10k-images-idx3-ubyte");
-
 	cnn::SolverParameter solver_param;
 	ReadProtoFromTextFile(file, &solver_param);
 	cnn::NetParameter net_param;
@@ -123,7 +120,8 @@ void LeNet5(char * file){
 	cnn::Datum test_data;
 	int n_label = 10;
 
-	int mini_batch_size;
+	int mini_batch_size_train;
+	int mini_batch_size_test;
 	int ninput_feature_map, noutput_feature_map, nrow_output, ncol_output, nrow_input, ncol_input;
 	int nrow_conv, ncol_conv;
 	int pad, stride;
@@ -134,7 +132,7 @@ void LeNet5(char * file){
 		if(layer_param.type() == cnn::LayerParameter_LayerType_DATA){
 			if (layer_param.include(0).phase() == 0){
 				dataSetup(layer_param, train_data);
-				mini_batch_size = layer_param.data_param().batch_size();
+				mini_batch_size_train = layer_param.data_param().batch_size();
 				ninput_feature_map = train_data.channels();
 				nrow_input = train_data.height();
 				ncol_input = train_data.width();
@@ -145,12 +143,16 @@ void LeNet5(char * file){
 		}
 	}
 
+
+	MNISTCorpus corpus("input/train-labels-idx1-ubyte", "input/train-images-idx3-ubyte", mini_batch_size_train, ninput_feature_map);
+	MNISTCorpus corpus_test("input/t10k-labels-idx1-ubyte", "input/t10k-images-idx3-ubyte", mini_batch_size_test, ninput_feature_map);
+
 	Network network(nlayers);
 
 	Layer* dataLayer = new Layer();
 	dataLayer->operations->inputs = corpus.images[0]->pixels;
 	dataLayer->operations->grads = NULL;
-	mini_batch_size = 1;
+
 	for (int l=0; l<nlayers; l++){
 		network.layers[l] = new Layer();
 		Layer * layerp;
@@ -174,7 +176,7 @@ void LeNet5(char * file){
 		nrow_output = (nrow_input - nrow_conv)/stride + 1;
 		ncol_output = (ncol_input - ncol_conv)/stride + 1;
 
-		layer->operations = (Operation*) new ConvOperation(mini_batch_size, ninput_feature_map, noutput_feature_map, nrow_output, ncol_output, nrow_input, ncol_input);
+		layer->operations = (Operation*) new ConvOperation(mini_batch_size_train, ninput_feature_map, noutput_feature_map, nrow_output, ncol_output, nrow_input, ncol_input);
 	    layer->operations->inputs = layerp->operations->output;
 		layer->operations->grads = layerp->operations->grad;
 
@@ -192,7 +194,7 @@ void LeNet5(char * file){
 		nrow_output = (nrow_input - nrow_conv)/stride + 1;
 		ncol_output = (ncol_input - ncol_conv)/stride + 1;
 
-		layer->operations = (Operation*) new MaxPoolingOperation(mini_batch_size, ninput_feature_map, noutput_feature_map, nrow_output, ncol_output, nrow_input, ncol_input);
+		layer->operations = (Operation*) new MaxPoolingOperation(mini_batch_size_train, ninput_feature_map, noutput_feature_map, nrow_output, ncol_output, nrow_input, ncol_input);
 	    layer->operations->inputs = layerp->operations->output;
 		layer->operations->grads = layerp->operations->grad;
 
@@ -207,7 +209,7 @@ void LeNet5(char * file){
 		nrow_output = nrow_input;
 		ncol_output = ncol_input;
 
-		layer->operations = (Operation*) new RELUOperation(mini_batch_size, ninput_feature_map, noutput_feature_map, nrow_output, ncol_output, nrow_input, ncol_input);
+		layer->operations = (Operation*) new RELUOperation(mini_batch_size_train, ninput_feature_map, noutput_feature_map, nrow_output, ncol_output, nrow_input, ncol_input);
 	    layer->operations->inputs = layerp->operations->output;
 		layer->operations->grads = layerp->operations->grad;
 
@@ -222,7 +224,7 @@ void LeNet5(char * file){
 		nrow_output = 1;
 		ncol_output = 1;
 
-		layer->operations = (Operation*) new FullyConnectedOperation(mini_batch_size, ninput_feature_map, noutput_feature_map, nrow_output, ncol_output, nrow_input, ncol_input);
+		layer->operations = (Operation*) new FullyConnectedOperation(mini_batch_size_train, ninput_feature_map, noutput_feature_map, nrow_output, ncol_output, nrow_input, ncol_input);
 	    layer->operations->inputs = layerp->operations->output;
 		layer->operations->grads = layerp->operations->grad;
 
@@ -237,7 +239,7 @@ void LeNet5(char * file){
 		nrow_output = 1;
 		ncol_output = 1;
 
-		layer->operations = (Operation*) new SoftmaxOperation(mini_batch_size, ninput_feature_map, noutput_feature_map, nrow_output, ncol_output, nrow_input, ncol_input);
+		layer->operations = (Operation*) new SoftmaxOperation(mini_batch_size_train, ninput_feature_map, noutput_feature_map, nrow_output, ncol_output, nrow_input, ncol_input);
 	    layer->operations->inputs = layerp->operations->output;
 		layer->operations->grads = layerp->operations->grad;
 
