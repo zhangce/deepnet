@@ -53,7 +53,7 @@ void LeNet5(char * file){
 			if (layer_param.include(0).phase() == 1){
 				dataSetup(layer_param, test_data);
 				mini_batch_size_test = layer_param.data_param().batch_size();
-				mini_batch_size_test=1;
+				mini_batch_size_test=mini_batch_size_train;
 			}
 			nlayers--;
 		}
@@ -197,7 +197,7 @@ void LeNet5(char * file){
 		cout << corpus.n_image << endl;
 		for(int i_img=0;i_img<corpus.n_batch;i_img++){
 
-			network.layers[nlayers-1]->operations->groundtruth 	= (corpus.images[i_img]->label);
+			network.layers[nlayers-1]->operations->groundtruth = (corpus.images[i_img]->label);
 			network.layers[0]->operations->inputs = corpus.images[i_img]->pixels;
 
 			network.forward();
@@ -212,27 +212,29 @@ void LeNet5(char * file){
 			(trainingtime/corpus.n_image) << " seconds/image." << std::endl;
 
 		t.restart();
-		for(int i_img=0;i_img<corpus_test.n_image;i_img++){
+		for(int i_img=0;i_img<corpus_test.n_batch;i_img++){
 			network.layers[nlayers-1]->operations->groundtruth 
 				= (corpus_test.images[i_img]->label);
 			network.layers[0]->operations->inputs 
 				= corpus_test.images[i_img]->pixels;
 			show("BEF")
 			network.forward();
-			
-			int gt = (corpus_test.images[i_img]->label[0]);
-			int imax;
-			float ifloat = -1;
-			for(int dig=0;dig<DIGIT;dig++){
-				float out = network.layers[nlayers-1]->operations->output[0][dig][0][0];
-				if(out > ifloat){
-					imax = dig;
-					ifloat = out;
+		 	
+			for(int img=0; img < mini_batch_size_test; img++){
+				int gt = (corpus_test.images[i_img]->label[img]);
+				int imax;
+				float ifloat = -1;
+				for(int dig=0;dig<DIGIT;dig++){
+					float out = network.layers[nlayers-1]->operations->output[img][dig][0][0];
+					if(out > ifloat){
+						imax = dig;
+						ifloat = out;
+					}
 				}
-			}
-			nneg[gt] ++;
-			ncorr_neg[gt] += (gt==imax);
-			loss_test += (gt==imax);
+				nneg[gt] ++;
+				ncorr_neg[gt] += (gt==imax);
+				loss_test += (gt==imax);
+			}	
 		}
 		float testingtime = t.elapsed();
 		std::cout << "Testing " << t.elapsed() << " seconds..." << "  " <<
