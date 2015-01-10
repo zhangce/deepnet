@@ -9,14 +9,14 @@ public:
 
 	Operation * operations;
 
-	void forward(){
+	void forward(int max_core, int num_core_per_chunk){
 		Operation * const operation = operations;
-		operation->forward();
+		operation->start_forward_thread(num_core_per_chunk, max_core);
 	}
 
-	void backward(){
+	void backward(int max_core,int num_core_per_chunk){
 		Operation * operation = operations;
-		operation->backward();
+		operation->start_backward_thread(num_core_per_chunk, max_core);
 	}
 
 	void clear_grad(){
@@ -32,16 +32,22 @@ public:
 
 	int n_layer;
 	Layer ** layers;
+	int num_core_per_chunk;
+	int max_core;
 
 	Network(int _n_layer){
 		n_layer = _n_layer;
 		layers = new Layer*[n_layer];
+		num_core_per_chunk=1;
+		max_core=1;
 	}
 
 	void forward(){
 		for(int i_layer=0; i_layer<n_layer; i_layer++){
+			// show(i_layer);
 			Layer * const layer = layers[i_layer];
-			layer->forward();
+			layer->forward(max_core,num_core_per_chunk);
+
 		}
 	}
 
@@ -52,8 +58,9 @@ public:
 		}
 
 		for(int i_layer=n_layer-1;i_layer>=0;i_layer--){
+			// show(i_layer);
 			Layer * layer = layers[i_layer];
-			layer->backward();
+			layer->backward(max_core,num_core_per_chunk);
 		}
 	}
 };

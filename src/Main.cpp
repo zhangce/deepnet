@@ -38,8 +38,14 @@ void LeNet5(char * file){
 	int ninput_feature_map, noutput_feature_map, nrow_output, ncol_output, nrow_input, ncol_input;
 	int nrow_conv, ncol_conv;
 	int pad, stride;
+	int group;
+
+	int local_size;
+	float ratio, alpha, beta;
+	bool is_across = false;
+
 	int nlayers = net_param.layers_size();
-		
+
 	for (int i=0; i<nlayers; i++){
 		cnn::LayerParameter layer_param = net_param.layers(i); 
 		if(layer_param.type() == cnn::LayerParameter_LayerType_DATA){
@@ -49,20 +55,26 @@ void LeNet5(char * file){
 				ninput_feature_map = train_data.channels();
 				nrow_input = train_data.height();
 				ncol_input = train_data.width();
+				//Corpus corpus(layer_param);
+				cout << "Corpus train loaded" << endl;
 			}
 			if (layer_param.include(0).phase() == 1){
 				dataSetup(layer_param, test_data);
 				mini_batch_size_test = layer_param.data_param().batch_size();
-				mini_batch_size_test=mini_batch_size_train;
+				mini_batch_size_test = mini_batch_size_train;
+				//Corpus corpus(layer_param);
+				//cout << "Corpus test loaded" << endl;
 			}
 			nlayers--;
 		}
 	}
-
-	MNISTCorpus corpus("input/train-labels-idx1-ubyte", "input/train-images-idx3-ubyte", mini_batch_size_train, ninput_feature_map);
-	cout << "Corpus train loaded" << endl;
-	MNISTCorpus corpus_test("input/t10k-labels-idx1-ubyte", "input/t10k-images-idx3-ubyte", mini_batch_size_test, ninput_feature_map);
-	cout << "Corpus test Loaded" << endl;	
+	cnn::LayerParameter layer_param = net_param.layers(0);
+	Corpus corpus(layer_param);
+	layer_param = net_param.layers(1);
+	Corpus corpus_test(layer_param);
+	//MNISTCorpus corpus("input/train-labels-idx1-ubyte", "input/train-images-idx3-ubyte", mini_batch_size_train, ninput_feature_map);
+	//cout << "Corpus train loaded" << endl;
+	//MNISTCorpus corpus_test("input/t10k-labels-idx1-ubyte", "input/t10k-images-idx3-ubyte", mini_batch_size_test, ninput_feature_map);
 
 	Network network(nlayers);
 
@@ -95,11 +107,13 @@ void LeNet5(char * file){
 		nrow_conv = layer_param.convolution_param().kernel_size();
 		noutput_feature_map = layer_param.convolution_param().num_output();
 		stride = layer_param.convolution_param().stride();
-		nrow_output = (nrow_input - nrow_conv)/stride + 1;
-		ncol_output = (ncol_input - ncol_conv)/stride + 1;
+		pad = layer_param.convolution_param().pad();
+		group = layer_param.convolution_param().group();
+		nrow_output = (nrow_input + 2*pad - nrow_conv)/stride + 1;
+		ncol_output = (ncol_input + 2*pad - ncol_conv)/stride + 1;
 
-		layer->operations = (Operation*) new ConvOperation(mini_batch_size_train, ninput_feature_map, noutput_feature_map, nrow_output, ncol_output, nrow_input, ncol_input);
-	        layer->operations->inputs = layerp->operations->output;
+		layer->operations = (Operation*) new ConvOperation(mini_batch_size_train, ninput_feature_map, noutput_feature_map, nrow_output, ncol_output, nrow_input, ncol_input,stride,pad,group);
+	    layer->operations->inputs = layerp->operations->output;
 		layer->operations->grads = layerp->operations->grad;
 
 		nrow_input = nrow_output;
@@ -113,10 +127,13 @@ void LeNet5(char * file){
 		nrow_conv = layer_param.pooling_param().kernel_size();
 		noutput_feature_map = ninput_feature_map;
 		stride = layer_param.pooling_param().stride();
-		nrow_output = (nrow_input - nrow_conv)/stride + 1;
-		ncol_output = (ncol_input - ncol_conv)/stride + 1;
+		pad = layer_param.convolution_param().pad();
 
-		layer->operations = (Operation*) new MaxPoolingOperation(mini_batch_size_train, ninput_feature_map, noutput_feature_map, nrow_output, ncol_output, nrow_input, ncol_input);
+		nrow_output = (nrow_input + 2*pad - nrow_conv)/stride + 1;
+		ncol_output = (ncol_input + 2*pad - ncol_conv)/stride + 1;
+
+
+		layer->operations = (Operation*) new MaxPoolingOperation(mini_batch_size_train, ninput_feature_map, noutput_feature_map, nrow_output, ncol_output, nrow_input, ncol_input,stride,pad);
 	    layer->operations->inputs = layerp->operations->output;
 		layer->operations->grads = layerp->operations->grad;
 
@@ -154,13 +171,53 @@ void LeNet5(char * file){
 		ncol_input = ncol_output;
 		ninput_feature_map = noutput_feature_map;
 		break;
+		
+		case cnn::LayerParameter_LayerType_LRN:
+		cout << "LRN Operation" << endl;
+		local_size = layer_param.lrn_param().local_size();
+		alpha = layer_param.lrn_param().alpha();
+		beta = layer_param.lrn_param().beta();
+		noutput_feature_map = ninput_feature_map;
+		nrow_output = nrow_input;
+		ncol_output = nrow_output;
+		if (layer_param.lrn_param().norm_region() == 0){
+			is_across = true;
+		}
+		else{
+			is_across = false;
+		}
 
+		layer->operations = (Operation*) new LRNOperation(mini_batch_size_train, ninput_feature_map, noutput_feature_map, nrow_output, ncol_output, nrow_input, ncol_input, local_size, alpha, beta, is_across);
+	    layer->operations->inputs = layerp->operations->output;
+		layer->operations->grads = layerp->operations->grad;
+
+		nrow_input = nrow_output;
+		ncol_input = ncol_output;
+		ninput_feature_map = noutput_feature_map;
+		break;
+
+		case cnn::LayerParameter_LayerType_DROPOUT:
+		cout << "Dropout Operation" << endl;
+		noutput_feature_map = ninput_feature_map;
+		ratio= layer_param.dropout_param().dropout_ratio();
+		nrow_output = nrow_input;
+		ncol_output = ncol_input;
+
+		layer->operations = (Operation*) new DropoutOperation(mini_batch_size_train, ninput_feature_map, noutput_feature_map, nrow_output, ncol_output, nrow_input, ncol_input, ratio);
+	    layer->operations->inputs = layerp->operations->output;
+		layer->operations->grads = layerp->operations->grad;
+
+		nrow_input = nrow_output;
+		ncol_input = ncol_output;
+		ninput_feature_map = noutput_feature_map;
+		break;
+		
 		case cnn::LayerParameter_LayerType_SOFTMAX_LOSS:
 		cout << "Softmax Operation" << endl;
 		noutput_feature_map = n_label;
 		nrow_output = 1;
 		ncol_output = 1;
-
+		
 		layer->operations = (Operation*) new SoftmaxOperation(mini_batch_size_train, ninput_feature_map, noutput_feature_map, nrow_output, ncol_output, nrow_input, ncol_input);
 	    layer->operations->inputs = layerp->operations->output;
 		layer->operations->grads = layerp->operations->grad;
@@ -169,7 +226,7 @@ void LeNet5(char * file){
 		ncol_input = ncol_output;
 		ninput_feature_map = noutput_feature_map;
 		break; 
-		
+
 		case cnn::LayerParameter_LayerType_ACCURACY:
 		break;
 
@@ -180,10 +237,12 @@ void LeNet5(char * file){
 	}
 
 	for(int i_epoch=0;i_epoch<1;i_epoch++){
+		show(i_epoch);
 		int ncorr[10];
 		int ncorr_neg[10];
 		int npos[10];
 		int nneg[10];
+		show(mini_batch_size_train);
 		for(int i=0;i<10;i++){
 			ncorr[i] = 0;
 			ncorr_neg[i] = 0;
@@ -196,15 +255,15 @@ void LeNet5(char * file){
 		Timer t;
 		cout << corpus.n_image << endl;
 		for(int i_img=0;i_img<corpus.n_batch;i_img++){
-
-			network.layers[nlayers-1]->operations->groundtruth = (corpus.images[i_img]->label);
+			show(i_img)
+			network.layers[nlayers-1]->operations->groundtruth 	= (corpus.images[i_img]->label);
 			network.layers[0]->operations->inputs = corpus.images[i_img]->pixels;
-
+			show("Starting Forward")
 			network.forward();
 					float trainingtime = t.elapsed();
 		std::cout << "Training " << trainingtime << " seconds..." << "  " <<
 			(trainingtime/corpus.n_image) << " seconds/image." << std::endl;
-
+			show("Starting Backward")
 			network.backward();
 		}
 		float trainingtime = t.elapsed();
@@ -213,29 +272,30 @@ void LeNet5(char * file){
 
 		t.restart();
 		for(int i_img=0;i_img<corpus_test.n_batch;i_img++){
-			network.layers[nlayers-1]->operations->groundtruth 
-				= (corpus_test.images[i_img]->label);
-			network.layers[0]->operations->inputs 
-				= corpus_test.images[i_img]->pixels;
-			show("BEF")
-			network.forward();
-		 	
-			for(int img=0; img < mini_batch_size_test; img++){
-				int gt = (corpus_test.images[i_img]->label[img]);
-				int imax;
-				float ifloat = -1;
-				for(int dig=0;dig<DIGIT;dig++){
-					float out = network.layers[nlayers-1]->operations->output[img][dig][0][0];
-					if(out > ifloat){
-						imax = dig;
-						ifloat = out;
-					}
-				}
-				nneg[gt] ++;
-				ncorr_neg[gt] += (gt==imax);
-				loss_test += (gt==imax);
-			}	
-		}
+            network.layers[nlayers-1]->operations->groundtruth
+                    = corpus_test.images[i_img]->label;
+            network.layers[0]->operations->inputs
+                    = corpus_test.images[i_img]->pixels;
+
+            network.forward();
+		
+            for(int img=0; img < mini_batch_size_test; img++){
+                    int gt = (corpus_test.images[i_img]->label[img]);
+                    int imax;
+                    float ifloat = -1;
+                    for(int dig=0;dig<DIGIT;dig++){
+                            float out = network.layers[nlayers-1]->operations->output[img][dig][0][0];
+                            if(out > ifloat){
+                                    imax = dig;
+                                    ifloat = out;
+                            }
+                    }
+                    nneg[gt] ++;
+                    ncorr_neg[gt] += (gt==imax);
+                    loss_test += (gt==imax);
+            }
+        }
+
 		float testingtime = t.elapsed();
 		std::cout << "Testing " << t.elapsed() << " seconds..." << "  " <<
 			(testingtime/corpus_test.n_image) << " seconds/image." << std::endl;
@@ -245,8 +305,9 @@ void LeNet5(char * file){
 			std::cout << "## DIG=" << dig << " : ";
 			std::cout << 1.0*ncorr_neg[dig]/nneg[dig] << " = " << ncorr_neg[dig] << "/" << nneg[dig] << std::endl;
 		}
+	
 	}
-
+	
 	std::cout << "DONE" << std::endl;
 
 }
