@@ -10,7 +10,7 @@
 #include "parser/parser.h"
 using namespace std;
 
-int DIGIT=10;
+int DIGIT=2;
 
 void LeNet5(char * file);
 
@@ -23,15 +23,15 @@ int main(int argc, char ** argv){
 
 void LeNet5(char * file){
 	
-	cnn::SolverParameter solver_param;
-	ReadProtoFromTextFile(file, &solver_param);
+//	cnn::SolverParameter solver_param;
+//	ReadProtoFromTextFile(file, &solver_param);
 	cnn::NetParameter net_param;
-	ReadNetParamsFromTextFile(solver_param.net(), &net_param);
+	ReadProtoFromTextFile(file, &net_param);
 	
 	// Build Network
 	cnn::Datum train_data;
 	cnn::Datum test_data;
-	int n_label = 10;
+	int n_label = 2;
 
 	int mini_batch_size_train;
 	int mini_batch_size_test;
@@ -43,7 +43,7 @@ void LeNet5(char * file){
 	int local_size;
 	float ratio, alpha, beta;
 	bool is_across = false;
-
+	
 	int nlayers = net_param.layers_size();
 
 	for (int i=0; i<nlayers; i++){
@@ -68,10 +68,16 @@ void LeNet5(char * file){
 			nlayers--;
 		}
 	}
+
+	nrow_input = 5;
+	ncol_input = 5;
+	mini_batch_size_train = 1;
+	ninput_feature_map = 1;
+
 	cnn::LayerParameter layer_param = net_param.layers(0);
 	Corpus corpus(layer_param);
-	layer_param = net_param.layers(1);
-	Corpus corpus_test(layer_param);
+//	layer_param = net_param.layers(1);
+//	Corpus corpus_test(layer_param);
 	//MNISTCorpus corpus("input/train-labels-idx1-ubyte", "input/train-images-idx3-ubyte", mini_batch_size_train, ninput_feature_map);
 	//cout << "Corpus train loaded" << endl;
 	//MNISTCorpus corpus_test("input/t10k-labels-idx1-ubyte", "input/t10k-images-idx3-ubyte", mini_batch_size_test, ninput_feature_map);
@@ -111,6 +117,9 @@ void LeNet5(char * file){
 		group = layer_param.convolution_param().group();
 		nrow_output = (nrow_input + 2*pad - nrow_conv)/stride + 1;
 		ncol_output = (ncol_input + 2*pad - ncol_conv)/stride + 1;
+				// show(stride)
+				// show(nrow_output)
+
 
 		layer->operations = (Operation*) new ConvOperation(mini_batch_size_train, ninput_feature_map, noutput_feature_map, nrow_output, ncol_output, nrow_input, ncol_input,stride,pad,group);
 	    layer->operations->inputs = layerp->operations->output;
@@ -236,14 +245,14 @@ void LeNet5(char * file){
 		}
 	}
 
-	for(int i_epoch=0;i_epoch<1;i_epoch++){
+	for(int i_epoch=0;i_epoch<100;i_epoch++){
 		show(i_epoch);
 		int ncorr[10];
 		int ncorr_neg[10];
 		int npos[10];
 		int nneg[10];
 		show(mini_batch_size_train);
-		for(int i=0;i<10;i++){
+		for(int i=0;i<n_label;i++){
 			ncorr[i] = 0;
 			ncorr_neg[i] = 0;
 			npos[i] = 0;
@@ -252,35 +261,78 @@ void LeNet5(char * file){
 		float loss = 0.0;
 		float loss_test = 0.0;
 
+		nrow_input = 5;
+		ncol_input = 5;
+		mini_batch_size_train = 1;
+		ninput_feature_map = 1;
 		Timer t;
 		cout << corpus.n_image << endl;
 		for(int i_img=0;i_img<corpus.n_batch;i_img++){
 			show(i_img)
-			network.layers[nlayers-1]->operations->groundtruth 	= (corpus.images[i_img]->label);
+			network.layers[nlayers-1]->operations->groundtruth[0]=i_img%2;
+			// network.layers[nlayers-1]->operations->groundtruth[ii]=corpus.images[i_img];
 			network.layers[0]->operations->inputs = corpus.images[i_img]->pixels;
+			
+			for(int b=0;b<mini_batch_size_train;++b){
+				for(int d=0;d<ninput_feature_map;++d){
+					for(int r=0;r<nrow_input;++r){
+						for(int c=0;c<ncol_input;++c){
+							network.layers[0]->operations->inputs[b][d][r][c] = i_img;
+						}
+					}
+				}
+            }
+            show("Input created")
+            for(int ofm=0; ofm<network.layers[0]->operations->noutput_feature_map;ofm++){
+                for(int ifm=0; ifm<network.layers[0]->operations->noutput_feature_map; ifm++){
+                    for(int r=0;r<network.layers[0]->operations->noutput_feature_map;r++){
+                        for(int c =0;c<network.layers[0]->operations->noutput_feature_map;c++){
+                                network.layers[0]->operations->weights[ofm][ifm][r][c] = ofm*10+ifm+i_img+1;
+                        }
+                    }
+                }
+            }
+            show("Initialising FUlly")
+
+			for(int ofm=0; ofm<network.layers[3]->operations->noutput_feature_map;ofm++){
+                for(int ifm=0; ifm<network.layers[3]->operations->ninput_feature_map; ifm++){
+                    for(int r=0;r<network.layers[3]->operations->nrow_conv;r++){
+                        for(int c =0;c<network.layers[3]->operations->ncol_conv;c++){
+                                network.layers[3]->operations->weights[ofm][ifm][r][c] = ofm*10+ifm+i_img+1;
+                        }
+                    }
+                }
+        	}
+
+        	show("Weights Created") 
+
 			show("Starting Forward")
 			network.forward();
-					float trainingtime = t.elapsed();
-		std::cout << "Training " << trainingtime << " seconds..." << "  " <<
-			(trainingtime/corpus.n_image) << " seconds/image." << std::endl;
-			show("Starting Backward")
+		 	network.layers[0]->operations->inputs_show();
+            network.layers[4]->operations->output_show();
+			float trainingtime = t.elapsed();
+			std::cout << "Training " << trainingtime << " seconds..." << "  " <<
+				(trainingtime/corpus.n_image) << " seconds/image." << std::endl;
+		//	show("Starting Backward")
+			
 			network.backward();
 		}
+
 		float trainingtime = t.elapsed();
 		std::cout << "Training " << trainingtime << " seconds..." << "  " <<
 			(trainingtime/corpus.n_image) << " seconds/image." << std::endl;
 
 		t.restart();
-		for(int i_img=0;i_img<corpus_test.n_batch;i_img++){
+		for(int i_img=0;i_img<corpus.n_batch;i_img++){
             network.layers[nlayers-1]->operations->groundtruth
-                    = corpus_test.images[i_img]->label;
+                    = corpus.images[i_img]->label;
             network.layers[0]->operations->inputs
-                    = corpus_test.images[i_img]->pixels;
+                    = corpus.images[i_img]->pixels;
 
             network.forward();
 		
             for(int img=0; img < mini_batch_size_test; img++){
-                    int gt = (corpus_test.images[i_img]->label[img]);
+                    int gt = (corpus.images[i_img]->label[img]);
                     int imax;
                     float ifloat = -1;
                     for(int dig=0;dig<DIGIT;dig++){
@@ -298,9 +350,9 @@ void LeNet5(char * file){
 
 		float testingtime = t.elapsed();
 		std::cout << "Testing " << t.elapsed() << " seconds..." << "  " <<
-			(testingtime/corpus_test.n_image) << " seconds/image." << std::endl;
+			(testingtime/corpus.n_image) << " seconds/image." << std::endl;
 		
-		std::cout << "----TEST----" << loss_test/corpus_test.n_image << std::endl;
+		std::cout << "----TEST----" << loss_test/corpus.n_image << std::endl;
 		for(int dig=0;dig<DIGIT;dig++){
 			std::cout << "## DIG=" << dig << " : ";
 			std::cout << 1.0*ncorr_neg[dig]/nneg[dig] << " = " << ncorr_neg[dig] << "/" << nneg[dig] << std::endl;

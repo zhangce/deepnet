@@ -20,6 +20,7 @@ public:
 	}
 
 	void clear_grad(){
+
 		Operation * operation = operations;
 		operation->clear_grad();
 	}
@@ -43,24 +44,34 @@ public:
 	}
 
 	void forward(){
+		show("Staring Forward")
 		for(int i_layer=0; i_layer<n_layer; i_layer++){
 			// show(i_layer);
 			Layer * const layer = layers[i_layer];
 			layer->forward(max_core,num_core_per_chunk);
-
+			// layer->operations->inputs_show();
+			// layer->operations->output_show();
+			// layer->operations->weights_show();
 		}
 	}
 
 	void backward(){
+		show("Clearing Grad")
 		for(int i_layer=0; i_layer<n_layer; i_layer++){
 			Layer * layer = layers[i_layer];
 			layer->clear_grad();
 		}
 
+		show("Staring Backward")
 		for(int i_layer=n_layer-1;i_layer>=0;i_layer--){
 			// show(i_layer);
 			Layer * layer = layers[i_layer];
 			layer->backward(max_core,num_core_per_chunk);
+			// layer->operations->inputs_show();
+			// layer->operations->output_show();
+			// layer->operations->weights_show();
+			// layer->operations->grad_show();
+			// layer->operations->grads_show();
 		}
 	}
 };

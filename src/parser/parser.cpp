@@ -64,5 +64,6 @@ void dataSetup(cnn::LayerParameter& layer_param, cnn::Datum& datum){
   default:
     break;
   }
+  mdb_env_close(mdb_env_);
 }
 

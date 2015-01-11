@@ -138,7 +138,7 @@ public:
 	}
 
 	void grads_show(){
-		cout << "INPUTS:" << endl;	
+		cout << "GRADS:" << endl;	
 		for(int mb=0; mb<mini_batch_size; mb++){
 			for(int fm=0; fm<ninput_feature_map; fm++){
 				for(int r=0;r<nrow_input;r++){
@@ -154,7 +154,7 @@ public:
 	}
 
 	void grad_show(){
-		cout << "OUTPUTS:" << endl;	
+		cout << "GRAD:" << endl;	
 		for(int mb=0; mb<mini_batch_size; mb++){
 			for(int fm=0; fm<noutput_feature_map; fm++){
 				for(int r=0;r<nrow_output;r++){
@@ -171,9 +171,9 @@ public:
 	   /** Returns true if the thread was successfully started, false if there was an error starting the thread */
 	void start_forward_thread(int num_core_per_chunk, int max_core)
 	{
-		cerr << "Number of cores per thread: " << num_core_per_chunk << endl;
+		// cerr << "Number of cores per thread: " << num_core_per_chunk << endl;
 		int n_threads=max_core/num_core_per_chunk;
-		cerr << "Number of threads: " << n_threads << endl;
+		// cerr << "Number of threads: " << n_threads << endl;
 		int CSIZE=mini_batch_size/n_threads;
 
 		pthread_t * thread=new pthread_t [n_threads];
@@ -195,9 +195,9 @@ public:
 	}
 	void start_backward_thread(int num_core_per_chunk, int max_core)
 	{
-		cerr << "Number of cores per thread: " << num_core_per_chunk << endl;
+		// cerr << "Number of cores per thread: " << num_core_per_chunk << endl;
 		int n_threads=max_core/num_core_per_chunk;
-		cerr << "Number of threads: " << n_threads << endl;
+		// cerr << "Number of threads: " << n_threads << endl;
 		int CSIZE=mini_batch_size/n_threads;
 
 		pthread_t * thread=new pthread_t [n_threads];
@@ -225,9 +225,9 @@ public:
 		int starting_ind=node_temp->starting_ind;
 		Operation * This = node_temp->op;
 		int type=node_temp->type;
-		show(mini_batch_size);
-		show(starting_ind)
-		show(type)
+		// show(mini_batch_size);
+		// show(starting_ind)
+		// show(type)
 		if(type==0)
 			This->forward(mini_batch_size,starting_ind); 
 		else
@@ -262,6 +262,7 @@ public:
 		group=_group;
 
 		groundtruth= new int [_mini_batch_size];
+		// show("A")
 		
 		buf_out = new float[mini_batch_size* noutput_feature_map * nrow_output*ncol_output];
 		output= new float ***[mini_batch_size];
@@ -276,9 +277,14 @@ public:
 				}
 			}
 		}
-
+		// show("B")
+		// show(mini_batch_size)
+		// show(noutput_feature_map)
+		// show(nrow_output)
+		// show(ncol_output)
 		buf_grad = new float[mini_batch_size * noutput_feature_map * nrow_output*ncol_output];
 		grad= new float ***[mini_batch_size];
+		// show("D")
 		for(int mb=0; mb<mini_batch_size; mb++){
 			grad[mb]=new float **[noutput_feature_map];
 			for(int fm=0; fm<noutput_feature_map; fm++){
@@ -290,8 +296,12 @@ public:
 				}
 			}
 		}
+				// show("C")
+
 		nrow_conv = nrow_input+2*pad - (nrow_output - 1) * stride;
-		ncol_conv = nrow_input+2*pad - (nrow_output - 1) * stride;
+		ncol_conv = ncol_input+2*pad - (ncol_output - 1) * stride;
+		// show(nrow_conv)
+		// show(ncol_conv)
 		buf_weight = new float[noutput_feature_map * ninput_feature_map * nrow_conv*ncol_conv];
 		weights= new float ***[noutput_feature_map];
 		for(int ofm=0; ofm<noutput_feature_map; ofm++){
@@ -328,7 +338,7 @@ public:
 				int _nrow_output, int _ncol_output, int _nrow_input, int _ncol_input, int _stride=1, int _pad=0, int _group=1):
 		Operation(_mini_batch_size, _ninput_feature_map, _noutput_feature_map,
 				_nrow_output,_ncol_output,_nrow_input,_ncol_input,_stride,_pad,_group){
-	
+		show(_mini_batch_size)
 		// init weights
 		for(int ofm=0; ofm<noutput_feature_map; ofm++)
 			for(int ifm=0; ifm<ninput_feature_map; ifm++)
@@ -340,83 +350,102 @@ public:
 			bias[ofm] = (drand48()*2-1)/10;
 	}
 
-	void backward(int batch_core, int starting_ind){
-		blasint DSIZE = nrow_input+2*pad;
+	void backward(int batch_core, int starting_ind){	
 		blasint KSIZE = nrow_conv;
-		blasint I = ninput_feature_map/group;
-		blasint O = noutput_feature_map/group;
+		blasint DSIZE = nrow_output+2*(KSIZE-1);
+		blasint I = noutput_feature_map/group;
+		blasint O = ninput_feature_map/group;
 		blasint MINIBATCHSIZE = mini_batch_size;
 		blasint NCONV=(DSIZE-KSIZE)/stride+1;
-
+		 
 		blasint NDATAROW = I*KSIZE*KSIZE;
 		blasint NDATACOL = NCONV * NCONV * MINIBATCHSIZE;
 		blasint NKERNELROW = O;
 		blasint OFFSET_KERN = NKERNELROW * NDATAROW;
 
-		float * data;
 		float alpha[] = {1.0, 1.0};
 		float beta []= {0.0, 0.0};
-
-
-		if (( data = (float *)malloc(sizeof(float) * NDATAROW * NDATACOL)) == NULL){
-				fprintf(stderr,"Out of Memory!!\n");exit(1);
-		}
 
 		char no_trans = 'N';
 		char trans = 'T';
 
 		float * buf_grads;
 		float * buf_grad_temp;
-		buf_grad_temp = (float *)malloc(sizeof(float) * O * NDATACOL);
-		buf_grads = (float *)malloc(sizeof(float) * NDATAROW * NDATACOL); 
+		buf_grads = (float *)malloc(sizeof(float) * O * NDATACOL);
+		buf_grad_temp = (float *)malloc(sizeof(float) * NDATAROW * NDATACOL); 
 		float * weight_diff = (float *)malloc(sizeof(float) * NDATAROW * O);
+		float * buf_weight_temp = (float *)malloc(sizeof(float) * I * O * KSIZE*KSIZE);
+		int indw=0;
+		for(int ofm=0; ofm<I; ofm++)
+			for(int ifm=0; ifm<O; ifm++)
+				for(int r=KSIZE-1; r>=0; r--)
+					for(int c=KSIZE-1; c>=0; c--)
+						buf_weight_temp[indw++]=weights[ofm][ifm][r][c];
 
+		// Calculating data gradiant
 		for(int g=0;g<group;g++){
 			int indx=0;
-			for(int mb=starting_ind; mb<starting_ind+batch_core; mb++)
-				for(int fm=g*O; fm<(g+1)*O; fm++)
-					for(int r=0;r<nrow_output;r++)
-						for(int c=0; c<ncol_output; c++)
-							buf_grad_temp[indx++] = output[mb][fm][r][c];
-
-			BLASFUNC(sgemm) (&no_trans, &trans, &NDATACOL, &NDATAROW, &O, alpha, buf_grad_temp, &NDATACOL, buf_weight+g*OFFSET_KERN, &NDATAROW, beta, buf_grads, &NDATACOL);
-			int idx =0;        
-			for(int mb=starting_ind; mb<starting_ind+batch_core; mb++)
+			for(int mb=0; mb<mini_batch_size; mb++)
 				for(int fm=g*I; fm<(g+1)*I; fm++)
-					for(int r=0; r<KSIZE; r++)
+					for(int r=0;r<KSIZE;r++)
 						for(int c=0; c<KSIZE; c++)
 							for(int i=0; i<NCONV*stride; i+=stride)
 								for(int j=0; j<NCONV*stride; j+=stride){
-									if(i+r<pad || i+r>=nrow_input+pad || j+c<pad || j+c>=ncol_input+pad)
-										grads[mb][fm][i+r-pad][j+c-pad] = buf_grads[idx++];
+									if(i+r<KSIZE-1||i+r>=DSIZE-KSIZE+1||j+c<KSIZE-1||j+c>=DSIZE-KSIZE+1)
+										buf_grad_temp[indx++] =0;
+									else			
+										buf_grad_temp[indx++] = grad[mb][fm][i+r-KSIZE+1][j+c-KSIZE+1];
 								}
 
-			indx=0;
-			for(int mb=starting_ind; mb<starting_ind+batch_core; mb++)
-				for(int fm=g*I; fm<(g+1)*I; fm++)
-					for(int r=0; r<KSIZE; r++)
-						for(int c=0; c<KSIZE; c++)
+
+			BLASF(sgemm) (&no_trans, &no_trans, &NDATACOL, &O, &NDATAROW, alpha, buf_grad_temp, &NDATACOL, buf_weight_temp+g*OFFSET_KERN, &NDATAROW, beta, buf_grads, &NDATACOL);
+
+			int idx =0;        
+			for(int mb=0; mb<MINIBATCHSIZE; mb++)
+				for(int fm=g*O; fm<(g+1)*O; fm++)
+					for(int r=0; r<NCONV; r++)
+						for(int c=0; c<NCONV; c++)
+							grads[mb][fm][r][c] = buf_grads[idx++];
+		}
+			
+		KSIZE = nrow_output;
+		DSIZE = nrow_input+2*pad;
+		I = ninput_feature_map/group;
+		O = noutput_feature_map/group;
+		MINIBATCHSIZE = mini_batch_size;
+		NCONV=nrow_conv;
+
+		NDATAROW = KSIZE*KSIZE*MINIBATCHSIZE;
+		NDATACOL = NCONV * NCONV * I;// * MINIBATCHSIZE;
+		NKERNELROW = O;
+		OFFSET_KERN = NKERNELROW * NDATAROW;
+
+		float * data;
+
+		if (( data = (float *)malloc(sizeof(float) * NDATAROW * NDATACOL)) == NULL){
+				fprintf(stderr,"Out of Memory!!\n");exit(1);
+		}
+
+		// Calculating weight gradiant
+		for(int g=0;g<group;g++){
+			int indx=0;
+			for(int mb=0; mb<MINIBATCHSIZE; mb++)
+				for(int r=0; r<KSIZE; r++)
+					for(int c=0; c<KSIZE; c++)
+						for(int fm=g*I; fm<(g+1)*I; fm++)
 							for(int i=0; i<NCONV*stride; i+=stride)
 								for(int j=0; j<NCONV*stride; j+=stride){
 									if(i+r<pad || i+r>=nrow_input+pad || j+c<pad || j+c>=ncol_input+pad)
 										data[indx++]=0;
 									else
 										data[indx++]=inputs[mb][fm][i+r-pad][j+c-pad];
-											// cout << data[indx-1] << " ";
 								}
+			BLASF(sgemm) (&no_trans, &no_trans, &NDATACOL, &O, &NDATAROW, alpha, data, &NDATACOL, buf_grad, &NDATAROW, beta, weight_diff, &NDATACOL);
 
-			BLASFUNC(sgemm) (&trans, &no_trans, &NDATAROW, &O, &NDATACOL, alpha, data, &NDATACOL, buf_grad_temp, &NDATACOL, beta, weight_diff, &NDATAROW);
-
-			for(int iter=g*O*NDATAROW;iter<(g+1)*O*NDATAROW;iter++){
-				buf_weight[iter] = buf_weight[iter] - weight_diff[iter-g*O*NDATAROW];
+			for(int iter=g*O*NDATACOL;iter<(g+1)*O*NDATACOL;iter++){
+				buf_weight[iter] = buf_weight[iter] - STEPSIZE*weight_diff[iter-g*O*NDATACOL];
 			}                  								
-		}
-		//// I think this is not necessary--Not sure
-		// for(int ofm=0; ofm<O*group; ofm++)
-	 //        for(int ifm=0; ifm<I*group; ifm++)
-  //               for(int r=0;r<KSIZE;r++)
-  //                   weights[ofm][ifm][r] = &buf_weight[ofm*O*group*KSIZE*KSIZE + ifm*KSIZE*KSIZE + r*KSIZE];
-
+		}	
 	}
 
 	void forward(int batch_core, int starting_ind){
@@ -433,8 +462,6 @@ public:
 		blasint OFFSET_KERN = NKERNELROW * NDATAROW;
 
 		float * data;
-		// float alpha = 1.0;
-		// float beta =0.0;
 		float alpha[] = {1.0, 1.0};
 		float beta []= {0.0, 0.0};
 
@@ -442,14 +469,6 @@ public:
 		if (( data = (float *)malloc(sizeof(float) * NDATAROW * NDATACOL)) == NULL){
 			fprintf(stderr,"Out of Memory!!\n");exit(1);
 		}
-		// show(DSIZE);
-		// show(KSIZE);
-		// show(I);
-		// show(O)
-		// show(MINIBATCHSIZE)
-		// show(NCONV)
-		// show(NDATAROW)
-		// show(NDATACOL)
 		float * buf_out_temp= new float [NKERNELROW*NDATACOL];
 		for(int g=0; g<group; g++){
 			// create data_lowered matrix
@@ -520,77 +539,99 @@ public:
 
 	}
 
-	void backward(int batch_core, int starting_ind){
-		blasint DSIZE = nrow_input+2*pad;
+	void backward(int batch_core, int starting_ind){	
 		blasint KSIZE = nrow_conv;
-		blasint I = ninput_feature_map/group;
-		blasint O = noutput_feature_map/group;
+		blasint DSIZE = nrow_output+2*(KSIZE-1);
+		blasint I = noutput_feature_map/group;
+		blasint O = ninput_feature_map/group;
 		blasint MINIBATCHSIZE = mini_batch_size;
 		blasint NCONV=(DSIZE-KSIZE)/stride+1;
-
+		 
 		blasint NDATAROW = I*KSIZE*KSIZE;
 		blasint NDATACOL = NCONV * NCONV * MINIBATCHSIZE;
 		blasint NKERNELROW = O;
 		blasint OFFSET_KERN = NKERNELROW * NDATAROW;
 
-		float * data;
 		float alpha[] = {1.0, 1.0};
 		float beta []= {0.0, 0.0};
-
-		if (( data = (float *)malloc(sizeof(float) * NDATAROW * NDATACOL)) == NULL){
-				fprintf(stderr,"Out of Memory!!\n");exit(1);
-		}
 
 		char no_trans = 'N';
 		char trans = 'T';
 
 		float * buf_grads;
 		float * buf_grad_temp;
-		buf_grad_temp = (float *)malloc(sizeof(float) * O * NDATACOL);
-		buf_grads = (float *)malloc(sizeof(float) * NDATAROW * NDATACOL); 
+		buf_grads = (float *)malloc(sizeof(float) * O * NDATACOL);
+		buf_grad_temp = (float *)malloc(sizeof(float) * NDATAROW * NDATACOL); 
 		float * weight_diff = (float *)malloc(sizeof(float) * NDATAROW * O);
+		float * buf_weight_temp = (float *)malloc(sizeof(float) * I * O * KSIZE*KSIZE);
+		int indw=0;
+		for(int ofm=0; ofm<I; ofm++)
+			for(int ifm=0; ifm<O; ifm++)
+				for(int r=KSIZE-1; r>=0; r--)
+					for(int c=KSIZE-1; c>=0; c--)
+						buf_weight_temp[indw++]=weights[ofm][ifm][r][c];
 
 		for(int g=0;g<group;g++){
 			int indx=0;
-			for(int mb=starting_ind; mb<starting_ind+batch_core; mb++)
-				for(int fm=g*O; fm<(g+1)*O; fm++)
-					for(int r=0;r<nrow_output;r++)
-						for(int c=0; c<ncol_output; c++)
-							buf_grad_temp[indx++] = output[mb][fm][r][c];
-
-			BLASFUNC(sgemm) (&no_trans, &trans, &NDATACOL, &NDATAROW, &O, alpha, buf_grad_temp, &NDATACOL, buf_weight+g*OFFSET_KERN, &NDATAROW, beta, buf_grads, &NDATACOL);
-			int idx =0;        
-			for(int mb=starting_ind; mb<starting_ind+batch_core; mb++)
+			for(int mb=0; mb<mini_batch_size; mb++)
 				for(int fm=g*I; fm<(g+1)*I; fm++)
-					for(int r=0; r<KSIZE; r++)
+					for(int r=0;r<KSIZE;r++)
 						for(int c=0; c<KSIZE; c++)
 							for(int i=0; i<NCONV*stride; i+=stride)
 								for(int j=0; j<NCONV*stride; j+=stride){
-									if(i+r<pad || i+r>=nrow_input+pad || j+c<pad || j+c>=ncol_input+pad)
-										grads[mb][fm][i+r-pad][j+c-pad] = buf_grads[idx++];
+									if(i+r<KSIZE-1||i+r>=DSIZE-KSIZE+1||j+c<KSIZE-1||j+c>=DSIZE-KSIZE+1)
+										buf_grad_temp[indx++] =0;
+									else			
+										buf_grad_temp[indx++] = grad[mb][fm][i+r-KSIZE+1][j+c-KSIZE+1];
 								}
 
-			indx=0;
-			for(int mb=starting_ind; mb<starting_ind+batch_core; mb++)
-				for(int fm=g*I; fm<(g+1)*I; fm++)
-					for(int r=0; r<KSIZE; r++)
-						for(int c=0; c<KSIZE; c++)
+
+			BLASF(sgemm) (&no_trans, &no_trans, &NDATACOL, &O, &NDATAROW, alpha, buf_grad_temp, &NDATACOL, buf_weight_temp+g*OFFSET_KERN, &NDATAROW, beta, buf_grads, &NDATACOL);
+
+			int idx =0;        
+			for(int mb=0; mb<MINIBATCHSIZE; mb++)
+				for(int fm=g*O; fm<(g+1)*O; fm++)
+					for(int r=0; r<NCONV; r++)
+						for(int c=0; c<NCONV; c++)
+							grads[mb][fm][r][c] = buf_grads[idx++];
+		}
+			
+		KSIZE = nrow_output;
+		DSIZE = nrow_input+2*pad;
+		I = ninput_feature_map/group;
+		O = noutput_feature_map/group;
+		MINIBATCHSIZE = mini_batch_size;
+		NCONV=nrow_conv;
+
+		NDATAROW = KSIZE*KSIZE*MINIBATCHSIZE;
+		NDATACOL = NCONV * NCONV * I;// * MINIBATCHSIZE;
+		NKERNELROW = O;
+		OFFSET_KERN = NKERNELROW * NDATAROW;
+
+		float * data;
+
+		if (( data = (float *)malloc(sizeof(float) * NDATAROW * NDATACOL)) == NULL){
+				fprintf(stderr,"Out of Memory!!\n");exit(1);
+		}
+		for(int g=0;g<group;g++){
+			int indx=0;
+			for(int mb=0; mb<MINIBATCHSIZE; mb++)
+				for(int r=0; r<KSIZE; r++)
+					for(int c=0; c<KSIZE; c++)
+						for(int fm=g*I; fm<(g+1)*I; fm++)
 							for(int i=0; i<NCONV*stride; i+=stride)
 								for(int j=0; j<NCONV*stride; j+=stride){
 									if(i+r<pad || i+r>=nrow_input+pad || j+c<pad || j+c>=ncol_input+pad)
 										data[indx++]=0;
 									else
 										data[indx++]=inputs[mb][fm][i+r-pad][j+c-pad];
-											// cout << data[indx-1] << " ";
 								}
+			BLASF(sgemm) (&no_trans, &no_trans, &NDATACOL, &O, &NDATAROW, alpha, data, &NDATACOL, buf_grad, &NDATAROW, beta, weight_diff, &NDATACOL);
 
-			BLASFUNC(sgemm) (&trans, &no_trans, &NDATAROW, &O, &NDATACOL, alpha, data, &NDATACOL, buf_grad_temp, &NDATACOL, beta, weight_diff, &NDATAROW);
-
-			for(int iter=g*O*NDATAROW;iter<(g+1)*O*NDATAROW;iter++){
-				buf_weight[iter] = buf_weight[iter] - weight_diff[iter-g*O*NDATAROW];
+			for(int iter=g*O*NDATACOL;iter<(g+1)*O*NDATACOL;iter++){
+				buf_weight[iter] = buf_weight[iter] - STEPSIZE* weight_diff[iter-g*O*NDATACOL];
 			}                  								
-		}
-
+		}	
 	}
 
 	void forward(int batch_core, int starting_ind){
@@ -614,7 +655,6 @@ public:
 			fprintf(stderr,"Out of Memory!!\n");exit(1);
 		}
 		
-		// create data_lowered matrix
 		// create data_lowered matrix
 		int indx=0;
 		for(int mb=0; mb<MINIBATCHSIZE; mb++)
@@ -771,6 +811,7 @@ public:
 
 					float grad_w = (label == groundtruth[mb])*x - cvalue*x;
 					float grad_x = (label == groundtruth[mb])*w - cvalue*w;
+					// show(groundtruth[mb])
 
 					softweights[mb][label][i_input] = 
 						softweights[mb][label][i_input] + STEPSIZE * grad_w;
@@ -1002,7 +1043,7 @@ public:
 							for(int ifm=begin; ifm<end; ifm++)
 								sum+=inputs[mb][ifm][r][c]*inputs[mb][ifm][r][c];
 							sum=sum*alpha/local_size+1;
-							output[mb][ofm][r][c]=pow(sum,beta);
+							output[mb][ofm][r][c]=inputs[mb][ofm][r][c]/pow(sum,beta);
 						}
 		}
 		else{
@@ -1019,7 +1060,7 @@ public:
 								for(int j=j_begin; j<j_end; j++)
 									sum+=inputs[mb][ofm][i][j]*inputs[mb][ofm][i][j];
 							sum=sum*alpha/local_size+1;
-							output[mb][ofm][r][c]=pow(sum,beta);
+							output[mb][ofm][r][c]=inputs[mb][ofm][r][c]/pow(sum,beta);
 						}
 		}
 	}
